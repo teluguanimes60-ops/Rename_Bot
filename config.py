@@ -55,13 +55,10 @@ class Config:
     # FIXED APPLICATION SETTINGS
     # =========================
 
-    # Archive/log backup channel
     ARCHIVE_CHANNEL_ID = -1004491486679
 
-    # Start image
     START_PIC = ""
 
-    # Web/health server
     PORT = 10000
 
 
@@ -150,16 +147,6 @@ class Config:
     # =========================
     # OWNER ONLY
     # =========================
-    #
-    # Preferred:
-    # OWNER_ID=123456789
-    #
-    # Backward compatibility:
-    # If OWNER_ID is not set, the first
-    # numeric value from ADMIN is used.
-    #
-    # ADMIN does NOT create multiple admins.
-    #
 
     _owner_raw = os.getenv(
         "OWNER_ID",
@@ -186,14 +173,14 @@ class Config:
         _owner_raw or "0"
     )
 
+    # Compatibility field for older modules.
+    # Authorization is still OWNER ONLY through helper.admin_access.
+    ADMIN = []
+
 
     # =========================
     # FILE SIZE LIMIT
     # =========================
-    #
-    # Maximum incoming file:
-    # 2 GiB
-    #
 
     MAX_FILE_SIZE_BYTES = (
         2
@@ -201,3 +188,22 @@ class Config:
         * 1024
         * 1024
     )
+
+
+    @classmethod
+    def validate(cls) -> list[str]:
+        missing = []
+
+        if cls.API_ID <= 0:
+            missing.append("API_ID")
+
+        if not cls.API_HASH:
+            missing.append("API_HASH")
+
+        if not cls.BOT_TOKEN:
+            missing.append("BOT_TOKEN")
+
+        if not cls.DATABASE_URL:
+            missing.append("DATABASE_URL")
+
+        return missing
