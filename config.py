@@ -182,6 +182,12 @@ class Config:
     # FILE SIZE LIMIT
     # =========================
 
+    # =========================
+    # OPTIONAL AI RENAME
+    # =========================
+
+    OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "").strip()
+    OPENAI_RENAME_MODEL = os.getenv("OPENAI_RENAME_MODEL", "gpt-5.6-sol").strip() or "gpt-5.6-sol"
     MAX_FILE_SIZE_BYTES = (
         2
         * 1024
