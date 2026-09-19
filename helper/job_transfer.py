@@ -175,6 +175,26 @@ async def upload_job(client: Client, job: Job, path: str, filename: str, status:
         reset_progress(job.job_id)
         started = time.time()
 
+        from helper.utils import is_transfer_cancelled
+        if is_transfer_cancelled(job.job_id):
+            raise AniToonTransferCancelled("Transfer cancelled by user")
+
+        # Show the upload stage immediately, before Pyrogram starts reading
+        # the local file. This makes video uploads behave like document
+        # uploads instead of appearing frozen between processing and upload.
+        try:
+            initial_size = os.path.getsize(path)
+            await progress_for_pyrogram(
+                0,
+                initial_size,
+                "Uploading",
+                status,
+                started,
+                job.job_id,
+            )
+        except Exception:
+            pass
+
         # prepare_video_for_telegram() already guarantees fast-start MP4 output.
         # Skip a second atom scan/remux for outputs prepared by _send_video().
         if as_video and not prepared_video and _needs_faststart(path):
