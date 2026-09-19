@@ -88,7 +88,11 @@ async def download_job(client: Client, message: Message, job: Job, status: Messa
     source = job.extra.get("source_message") or job.extra.get("file_id") or message
     os.makedirs(job.work_dir, exist_ok=True)
 
-    media = getattr(source, "video", None) or getattr(source, "document", None)
+    media = (
+        getattr(source, "video", None)
+        or getattr(source, "document", None)
+        or getattr(source, "audio", None)
+    )
     duration = getattr(media, "duration", None) if media is not None else None
     if duration:
         set_transfer_runtime(job.job_id, duration)
@@ -145,6 +149,18 @@ async def download_job(client: Client, message: Message, job: Job, status: Messa
             jobs.release()
 
 
+async def _send_with_floodwait_retry(send_callable, *args, **kwargs):
+    """Send a Telegram media message, retrying FloodWait safely."""
+    for attempt in range(3):
+        try:
+            return await send_callable(*args, **kwargs)
+        except FloodWait as exc:
+            wait_time = max(1, int(getattr(exc, "value", 1) or 1))
+            if attempt >= 2:
+                raise
+            await asyncio.sleep(wait_time)
+    raise RuntimeError("Telegram send retry loop ended unexpectedly")
+
 async def upload_job(client: Client, job: Job, path: str, filename: str, status: Message | None = None, *, as_video: bool = False, prepared_video: bool = False):
     """Upload a file. When as_video=True, send a real streamable Telegram video."""
     if not os.path.isfile(path) or os.path.getsize(path) <= 0:
@@ -198,19 +214,73 @@ async def upload_job(client: Client, job: Job, path: str, filename: str, status:
                 # send_video creates Telegram's native video message. With
                 # supports_streaming=True + fast-start MP4, Telegram clients
                 # can begin playback while the recipient is downloading it.
-                return await client.send_video(job.user_id, upload_path, **kwargs)
-            except Exception as exc:
-                if thumb and "thumb" in str(exc).lower():
+                return await _send_with_floodwait_retry(
+                    client.send_video,
+                    job.user_id,
+                    upload_path,
+                    **kwargs,
+                )
+            except Exception as first_exc:
+                # Retry without a custom thumbnail if Telegram rejects it.
+                if thumb and "thumb" in str(first_exc).lower():
                     kwargs.pop("thumb", None)
-                    return await client.send_video(job.user_id, upload_path, **kwargs)
-                raise RuntimeError(f"Telegram video upload failed: {exc}") from exc
+                    try:
+                        return await _send_with_floodwait_retry(
+                            client.send_video,
+                            job.user_id,
+                            upload_path,
+                            **kwargs,
+                        )
+                    except Exception as second_exc:
+                        first_exc = second_exc
 
-        kwargs["caption"] = f"✅ **AniToon Processed**\n\n📂 `{filename}`\n📦 `{humanbytes(size)}`"
+                # If native video upload is rejected, send the same file as a
+                # document so the completed processing job is not lost.
+                fallback_kwargs = {
+                    "caption": (
+                        f"✅ **AniToon Processed**\n\n"
+                        f"📂 `{filename}`\n"
+                        f"📦 `{humanbytes(size)}`\n\n"
+                        "ℹ️ Telegram did not accept this file as a native video, "
+                        "so it was uploaded as a document."
+                    ),
+                    "progress": progress_for_pyrogram,
+                    "progress_args": (
+                        "Uploading",
+                        status,
+                        started,
+                        job.job_id,
+                    ),
+                }
+                try:
+                    return await _send_with_floodwait_retry(
+                        client.send_document,
+                        job.user_id,
+                        upload_path,
+                        **fallback_kwargs,
+                    )
+                except Exception as fallback_exc:
+                    raise RuntimeError(
+                        f"Telegram video upload failed: {first_exc}; "
+                        f"document fallback failed: {fallback_exc}"
+                    ) from fallback_exc
+
+                kwargs["caption"] = f"✅ **AniToon Processed**\n\n📂 `{filename}`\n📦 `{humanbytes(size)}`"
         ext = os.path.splitext(filename)[1].lower()
         mime = (job.mime_type or "").lower()
         if mime.startswith("audio/") or ext in {".mp3", ".m4a", ".aac", ".flac", ".ogg", ".wav", ".opus"}:
-            return await client.send_audio(job.user_id, upload_path, **kwargs)
-        return await client.send_document(job.user_id, upload_path, **kwargs)
+            return await _send_with_floodwait_retry(
+                client.send_audio,
+                job.user_id,
+                upload_path,
+                **kwargs,
+            )
+        return await _send_with_floodwait_retry(
+            client.send_document,
+            job.user_id,
+            upload_path,
+            **kwargs,
+        )
     finally:
         if temporary_streamable and temporary_streamable != path:
             try:
