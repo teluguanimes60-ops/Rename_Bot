@@ -67,7 +67,7 @@ async def _conversion_progress(current: float, total: float, status, job_id: str
     percent = max(0.0, min(99.9, (float(current) * 100.0) / float(total)))
     try:
         filled = max(0, min(24, int(percent / 100 * 24)))
-        await status.edit_text("⚙️ **Converting Video**\n" + "█" * filled + "░" * (24 - filled) + f" {percent:.1f}%\n\n📂 `{label}`\n🎬 The final result will be sent as a playable Telegram video.", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("❌ Cancel", callback_data=f"transfer:cancel:{job_id}")]]))
+        await status.edit_text("⚙️ **Processing**\n" + "█" * filled + "░" * (24 - filled) + f" {percent:.1f}%\n\n📂 `{label}`", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("❌ Cancel", callback_data=f"transfer:cancel:{job_id}")]]))
     except Exception: pass
 
 
@@ -120,10 +120,13 @@ async def process_custom_name_job(client, message, job, name: str):
                     safe_name,
                 )
 
+            # Rename-to-video must not display a separate conversion stage.
+            # The preparation step never resizes the video; it stream-copies
+            # compatible codecs and only transcodes when Telegram requires it.
             prepared = await prepare_video_for_telegram(
                 job.input_path,
                 prepared_path,
-                report,
+                None,
             )
             if not prepared or not os.path.isfile(prepared):
                 raise RuntimeError(
