@@ -161,6 +161,7 @@ async def inspect_media_streams(file_path):
 
 async def remux_with_track_names(input_file, output_file, track_titles: dict[str, str], global_title: str | None = None):
     cmd = ["ffmpeg", "-y", "-i", input_file, "-map", "0", "-c", "copy"]
+    if str(output_file).lower().endswith(".mp4"): cmd += ["-movflags", "+faststart"]
     if global_title: cmd += ["-metadata", f"title={global_title}"]
     for stream_key, title in track_titles.items():
         clean = str(title).strip()
