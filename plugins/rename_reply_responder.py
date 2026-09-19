@@ -30,14 +30,19 @@ async def _apply_metadata_settings(job, output_path: str) -> None:
             return
         from helper.metadata import get_metadata
         settings = await get_metadata(job.user_id)
+        from helper.metadata import language_name
         titles = {}
         audio_index = subtitle_index = 0
         for stream in streams:
             if stream["type"] == "audio":
-                titles[f"audio:{audio_index}"] = settings.audio_name
+                language = language_name(stream.get("language"), settings.audio_language)
+                title = " ".join(x for x in (settings.audio_prefix, language, settings.audio_suffix) if x).strip()
+                titles[f"audio:{audio_index}"] = title
                 audio_index += 1
             elif stream["type"] == "subtitle":
-                titles[f"subtitle:{subtitle_index}"] = settings.subtitle_name
+                language = language_name(stream.get("language"), settings.subtitle_language)
+                title = " ".join(x for x in (settings.subtitle_prefix, language, settings.subtitle_suffix) if x).strip()
+                titles[f"subtitle:{subtitle_index}"] = title
                 subtitle_index += 1
         if not titles:
             return
