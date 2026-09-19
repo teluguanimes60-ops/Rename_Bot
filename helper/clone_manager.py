@@ -15,11 +15,29 @@ class CloneManager:
         self.clones: dict[int, Client] = {}
 
     async def _setup_clone_commands(self, client: Client):
-        """Clones have no slash-command menu; commands are reserved for the main bot."""
+        """Give clones the same normal user command menu as the main bot.
+
+        Owner/management commands are intentionally not exposed on clones.
+        The main bot remains the only bot with owner-level access.
+        """
+        from pyrogram.types import BotCommand
+
+        commands = [
+            BotCommand("start", "Open AniToon"),
+            BotCommand("help", "Show help"),
+            BotCommand("cancel", "Cancel current processing"),
+            BotCommand("queue", "Show queue file information"),
+        ]
+
         try:
             await client.delete_bot_commands()
+            await client.set_bot_commands(commands)
+            log.info(
+                "Clone command menu configured for @%s",
+                getattr(client, "bot_username", None) or getattr(client, "bot_id", 0),
+            )
         except Exception:
-            log.exception("Could not clear clone command menu")
+            log.exception("Could not configure clone command menu")
 
     async def start_clone(self, bot_token: str):
         client = None
