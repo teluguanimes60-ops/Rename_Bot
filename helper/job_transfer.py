@@ -269,13 +269,12 @@ async def upload_job(client: Client, job: Job, path: str, filename: str, status:
 
                 # If native video upload is rejected, send the same file as a
                 # document so the completed processing job is not lost.
+                fallback_caption = await _output_caption_for_job(job, filename, size, duration)
                 fallback_kwargs = {
                     "caption": (
-                        f"✅ **AniToon Processed**\n\n"
-                        f"📂 `{filename}`\n"
-                        f"📦 `{humanbytes(size)}`\n\n"
-                        "ℹ️ Telegram did not accept this file as a native video, "
-                        "so it was uploaded as a document."
+                        fallback_caption
+                        + "\n\n"
+                        + "ℹ️ Telegram did not accept this file as a native video, so it was uploaded as a document."
                     ),
                     "progress": progress_for_pyrogram,
                     "progress_args": (
