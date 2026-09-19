@@ -209,8 +209,9 @@ async def rename_output_fix(client, cb):
     from helper.ai_rename import ai_auto_name, apply_permanent_template
 
     try:
+        notice = None
         if rename_mode == "auto":
-            status = await cb.message.reply_text("🤖 **Auto Rename**\n\nAnalyzing and cleaning the filename...")
+            notice = await cb.message.reply_text("🤖 **Auto Rename**\n\nAnalyzing and cleaning the filename...")
             name = await ai_auto_name(job.original_name)
         elif rename_mode == "permanent":
             template = await db.get_rename_template(user_id)
@@ -230,7 +231,6 @@ async def rename_output_fix(client, cb):
                     pass
                 raise StopPropagation
             name = apply_permanent_template(template, job.original_name)
-            status = await cb.message.reply_text(f"🏷 **Permanent Rename**\n\nNew name: `{name}`")
         else:
             await cb.message.reply_text("⚠️ Unknown rename mode. Manual mode will be used.")
             await _ask_name(
@@ -244,6 +244,12 @@ async def rename_output_fix(client, cb):
 
         # Remove the action-menu message before processing so the chat
         # contains only the live transfer status and final result.
+        if notice is not None:
+            try:
+                await notice.delete()
+            except Exception:
+                pass
+
         try:
             await cb.message.delete()
         except Exception:
