@@ -31,16 +31,23 @@ async def send_plan_menu(client, chat_id, target_bot_id):
     for plan in all_paid_plans():
         buttons.append([InlineKeyboardButton(f"{plan.name} • {plan.stars} ⭐", callback_data=f"buy:{plan.key}:{int(target_bot_id)}")])
     buttons.append([InlineKeyboardButton("⬅️ Back", callback_data="start")])
-    text = (
-        "💎 **AniToon Premium Plans**\n\nChoose your plan for 30 days:\n\n"
-        "🆓 **Free**\n⭐ 0 Stars\n📊 10 GB/day\n\n"
-        "⚡ **Pro**\n⭐ 10 Stars / 30 days\n📊 20 GB/day\n\n"
-        "💎 **Premium**\n⭐ 20 Stars / 30 days\n📊 40 GB/day\n\n"
-        "👑 **Ultra**\n⭐ 30 Stars / 30 days\n📊 60 GB/day\n\n"
-        "✂️ Large files are split into parts when required."
-    )
-    await client.send_message(chat_id=chat_id, text=text, reply_markup=InlineKeyboardMarkup(buttons))
 
+    free = get_plan("free")
+    lines = [
+        "💎 **AniToon Premium Plans**",
+        "",
+        "Choose a plan for 30 days:",
+        "",
+        f"🆓 **Free** — 0 ⭐ — {free.daily_limit / (1024**3):g} GB/day",
+    ]
+    for plan in all_paid_plans():
+        lines.append(f"{plan.name} — {plan.stars} ⭐ / {plan.days} days — {plan.daily_limit / (1024**3):g} GB/day")
+    lines.extend(["", "✂️ Large files are split into parts when Telegram requires it."])
+    await client.send_message(
+        chat_id=chat_id,
+        text="\n".join(lines),
+        reply_markup=InlineKeyboardMarkup(buttons),
+    )
 
 @Client.on_message(filters.private & filters.command(["plan", "myplan", "status"]))
 async def user_plan_status(client, message):
