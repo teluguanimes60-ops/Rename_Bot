@@ -4,84 +4,154 @@ from dataclasses import dataclass
 
 from helper.database import db
 
-DEFAULT_AUDIO_PREFIX = "[AniToon]"
+DEFAULT_PREFIX = "@anitoon_edit"
 DEFAULT_AUDIO_LANGUAGE = "Japanese"
-DEFAULT_SUBTITLE_PREFIX = "[AniToon]"
 DEFAULT_SUBTITLE_LANGUAGE = "English"
 
 
 @dataclass(frozen=True)
 class MetadataSettings:
-    audio_prefix: str = DEFAULT_AUDIO_PREFIX
+    audio_prefix: str = DEFAULT_PREFIX
     audio_language: str = DEFAULT_AUDIO_LANGUAGE
-    subtitle_prefix: str = DEFAULT_SUBTITLE_PREFIX
+    audio_suffix: str = ""
+    subtitle_prefix: str = DEFAULT_PREFIX
     subtitle_language: str = DEFAULT_SUBTITLE_LANGUAGE
+    subtitle_suffix: str = ""
 
     @property
     def audio_name(self) -> str:
-        return _join(self.audio_prefix, self.audio_language)
+        return _join(self.audio_prefix, self.audio_language, self.audio_suffix)
 
     @property
     def subtitle_name(self) -> str:
-        return _join(self.subtitle_prefix, self.subtitle_language)
+        return _join(self.subtitle_prefix, self.subtitle_language, self.subtitle_suffix)
 
 
-def _clean(value: object, fallback: str) -> str:
+def _clean_language(value: object, fallback: str) -> str:
     value = str(value or "").strip()
-    return value if value else fallback
+    return value or fallback
 
 
-def _join(prefix: str, language: str) -> str:
-    prefix = str(prefix or "").strip()
-    language = str(language or "").strip()
-    return f"{prefix} {language}".strip()
+def _clean_affix(value: object) -> str:
+    return str(value or "").strip()
 
 
-def _legacy_parts(value: object, default_prefix: str, default_language: str) -> tuple[str, str]:
+def _join(prefix: str, language: str, suffix: str) -> str:
+    return " ".join(
+        part for part in (
+            _clean_affix(prefix),
+            _clean_language(language, DEFAULT_AUDIO_LANGUAGE),
+            _clean_affix(suffix),
+        )
+        if part
+    ).strip()
+
+
+def _legacy_parts(
+    value: object,
+    default_prefix: str,
+    default_language: str,
+) -> tuple[str, str, str]:
     text = str(value or "").strip()
     if not text or text == "AniToon Official":
-        return default_prefix, default_language
+        return default_prefix, default_language, ""
+
+    # Old data stored "[AniToon] Japanese" in one field.
     if text.startswith("[") and "]" in text:
         end = text.find("]") + 1
-        return text[:end].strip(), text[end:].strip() or default_language
-    return "", text
+        return text[:end].strip(), text[end:].strip() or default_language, ""
+
+    # If an old value only contains a language, keep it and use the new
+    # default prefix.
+    if " " not in text:
+        return default_prefix, text, ""
+
+    return default_prefix, text, ""
 
 
 async def get_metadata(user_id: int) -> MetadataSettings:
     await db.add_user(user_id)
     user = await db.get_user_data(user_id) or {}
-    ap, al = _legacy_parts(user.get("audio_name"), DEFAULT_AUDIO_PREFIX, DEFAULT_AUDIO_LANGUAGE)
-    sp, sl = _legacy_parts(user.get("sub_name"), DEFAULT_SUBTITLE_PREFIX, DEFAULT_SUBTITLE_LANGUAGE)
+
+    ap, al, asuf = _legacy_parts(
+        user.get("audio_name"),
+        DEFAULT_PREFIX,
+        DEFAULT_AUDIO_LANGUAGE,
+    )
+    sp, sl, ssuf = _legacy_parts(
+        user.get("sub_name"),
+        DEFAULT_PREFIX,
+        DEFAULT_SUBTITLE_LANGUAGE,
+    )
+
     return MetadataSettings(
-        audio_prefix=_clean(user.get("audio_prefix"), ap),
-        audio_language=_clean(user.get("audio_language"), al),
-        subtitle_prefix=_clean(user.get("subtitle_prefix"), sp),
-        subtitle_language=_clean(user.get("subtitle_language"), sl),
+        audio_prefix=(
+            str(user.get("audio_prefix")).strip()
+            if user.get("audio_prefix") is not None
+            else ap
+        ),
+        audio_language=_clean_language(
+            user.get("audio_language"),
+            al,
+        ),
+        audio_suffix=_clean_affix(
+            user.get("audio_suffix", asuf)
+        ),
+        subtitle_prefix=(
+            str(user.get("subtitle_prefix")).strip()
+            if user.get("subtitle_prefix") is not None
+            else sp
+        ),
+        subtitle_language=_clean_language(
+            user.get("subtitle_language"),
+            sl,
+        ),
+        subtitle_suffix=_clean_affix(
+            user.get("subtitle_suffix", ssuf)
+        ),
     )
 
 
-async def save_metadata(user_id: int, settings: MetadataSettings) -> None:
+async def save_metadata(
+    user_id: int,
+    settings: MetadataSettings,
+) -> None:
     await db.set_metadata_parts(
         user_id,
         audio_prefix=settings.audio_prefix,
         audio_language=settings.audio_language,
+        audio_suffix=settings.audio_suffix,
         subtitle_prefix=settings.subtitle_prefix,
         subtitle_language=settings.subtitle_language,
+        subtitle_suffix=settings.subtitle_suffix,
     )
 
 
-async def update_metadata_part(user_id: int, kind: str, field: str, value: str) -> MetadataSettings:
+async def update_metadata_part(
+    user_id: int,
+    kind: str,
+    field: str,
+    value: str,
+) -> MetadataSettings:
     current = await get_metadata(user_id)
     values = {
         "audio_prefix": current.audio_prefix,
         "audio_language": current.audio_language,
+        "audio_suffix": current.audio_suffix,
         "subtitle_prefix": current.subtitle_prefix,
         "subtitle_language": current.subtitle_language,
+        "subtitle_suffix": current.subtitle_suffix,
     }
+
     key = f"{kind}_{field}"
     if key not in values:
         raise ValueError("Invalid metadata field")
+
     values[key] = str(value).strip()
+
+    if field == "language" and not values[key]:
+        raise ValueError("Language cannot be empty")
+
     updated = MetadataSettings(**values)
     await save_metadata(user_id, updated)
     return updated
