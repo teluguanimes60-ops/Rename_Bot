@@ -23,6 +23,7 @@ jobs:
             helper/job_transfer.py \
             helper/clone_manager.py \
             plugins/ui.py \
+            plugins/cb_data.py \
             plugins/rename_settings.py \
             plugins/file_action_fix.py \
             plugins/rename_reply_responder.py
