@@ -161,6 +161,17 @@ async def _send_with_floodwait_retry(send_callable, *args, **kwargs):
             await asyncio.sleep(wait_time)
     raise RuntimeError("Telegram send retry loop ended unexpectedly")
 
+async def _output_caption_for_job(job: Job, filename: str, size: int, duration: float = 0) -> str:
+    default = f"✅ **AniToon Processed**\n\n📂 `{filename}`\n📦 `{humanbytes(size)}`"
+    try:
+        from helper.database import db
+        saved = await db.get_caption(job.user_id)
+    except Exception:
+        saved = None
+    if not saved:
+        return default
+    return str(saved).replace("{filename}", filename).replace("{filesize}", humanbytes(size)).replace("{duration}", str(int(duration)))
+
 async def upload_job(client: Client, job: Job, path: str, filename: str, status: Message | None = None, *, as_video: bool = False, prepared_video: bool = False):
     """Upload a file. When as_video=True, send a real streamable Telegram video."""
     if not os.path.isfile(path) or os.path.getsize(path) <= 0:
@@ -205,10 +216,11 @@ async def upload_job(client: Client, job: Job, path: str, filename: str, status:
                 upload_path = prepared
 
         size = os.path.getsize(upload_path)
+        caption = await _output_caption_for_job(job, filename, size)
         kwargs = {
             "progress": progress_for_pyrogram,
             "progress_args": ("Uploading", status, started, job.job_id),
-            "caption": f"✅ **AniToon Processed**\n\n📂 `{filename}`\n📦 `{humanbytes(size)}`",
+            "caption": caption,
         }
         if as_video:
             from helper.ffmpeg import get_video_info
@@ -217,7 +229,7 @@ async def upload_job(client: Client, job: Job, path: str, filename: str, status:
                 raise RuntimeError("Video metadata could not be read before upload")
             set_transfer_runtime(job.job_id, duration)
             kwargs.update({
-                "caption": f"✅ **AniToon Processed**\n\n📂 `{filename}`\n📦 `{humanbytes(size)}`\n⏱ `{int(duration // 60):02d}:{int(duration % 60):02d}`",
+                "caption": await _output_caption_for_job(job, filename, size, duration),
                 "duration": max(1, int(round(duration))),
                 "width": int(width),
                 "height": int(height),
