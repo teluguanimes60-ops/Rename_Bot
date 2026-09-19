@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import re
@@ -68,6 +69,13 @@ def _extract_output_text(data: dict) -> str:
     return ""
 
 
+
+def apply_permanent_template(template: str, filename: str) -> str:
+    original = os.path.basename(str(filename or ""))
+    stem, ext = os.path.splitext(original)
+    rendered = str(template or "").strip()
+    rendered = rendered.replace("{name}", stem).replace("{filename}", original).replace("{ext}", ext.lstrip("."))
+    return _safe_stem(rendered) or _safe_stem(stem) or "AniToon"
 async def ai_auto_name(filename: str) -> str:
     fallback = heuristic_auto_name(filename)
     api_key = getattr(Config, "OPENAI_API_KEY", "").strip()
@@ -102,8 +110,11 @@ async def ai_auto_name(filename: str) -> str:
         method="POST",
     )
     try:
-        with urllib.request.urlopen(request, timeout=25) as response:
-            raw = response.read().decode("utf-8", errors="replace")
+        def _request() -> str:
+            with urllib.request.urlopen(request, timeout=25) as response:
+                return response.read().decode("utf-8", errors="replace")
+
+        raw = await asyncio.to_thread(_request)
         data = json.loads(raw)
         result = _safe_stem(_extract_output_text(data))
         result = re.sub(r"^['\`]+|['\`]+$", "", result).strip()
