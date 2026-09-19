@@ -84,6 +84,108 @@ async def _finish_delivery(client, message, job, status):
     await _delete_message_safely(client, status.chat.id, status.id)
 
 
+
+async def process_custom_name_job(client, message, job, name: str):
+    """Process a rename job using a filename selected by a rename mode."""
+    source_ext = _extension(job.original_name)
+    video_mode = (job.extra or {}).get("rename_output_mode") == "video"
+
+    safe_name = _safe_filename(name)
+    if video_mode:
+        safe_name = f"\{_base_without_extension(safe_name)}.mp4"
+    else:
+        if not _extension(safe_name) and source_ext:
+            safe_name = f"\{safe_name}.\{source_ext}"
+        elif _extension(safe_name) and source_ext:
+            safe_name = f"\{_base_without_extension(safe_name)}.\{source_ext}"
+
+    status = await _new_transfer_status(
+        client,
+        message,
+        job,
+        int((job.extra or {}).get("telegram_file_size", 0) or 0),
+    )
+    try:
+        await _download_source(client, message, job, status)
+
+        if video_mode:
+            prepared_path = os.path.join(job.work_dir, ".converted_video.mp4")
+
+            async def report(current, total):
+                await _conversion_progress(
+                    current,
+                    total,
+                    status,
+                    job.job_id,
+                    safe_name,
+                )
+
+            prepared = await prepare_video_for_telegram(
+                job.input_path,
+                prepared_path,
+                report,
+            )
+            if not prepared or not os.path.isfile(prepared):
+                raise RuntimeError(
+                    "Could not convert the source into a Telegram-compatible MP4 video"
+                )
+            job.mime_type = "video/mp4"
+            results = await _deliver_output(
+                client,
+                job,
+                prepared,
+                safe_name,
+                status,
+                prepared_video=True,
+            )
+            output_for_size = prepared
+        else:
+            output_path = os.path.join(job.work_dir, safe_name)
+            os.replace(job.input_path, output_path)
+            results = await _deliver_output(
+                client,
+                job,
+                output_path,
+                safe_name,
+                status,
+            )
+            output_for_size = output_path
+
+        if not results:
+            raise RuntimeError("Telegram returned no uploaded result")
+
+        size = int(
+            (job.extra or {}).get("downloaded_size", 0)
+            or os.path.getsize(output_for_size)
+        )
+        await db.update_usage(job.user_id, job.bot_id, size)
+        await mark_rename_completed(job.job_id)
+        await _finish_delivery(client, message, job, status)
+        return results
+    except AniToonTransferCancelled:
+        try:
+            await status.edit_text("❌ **Processing cancelled.**")
+        except Exception:
+            pass
+    except asyncio.CancelledError:
+        try:
+            await status.edit_text("❌ **Processing cancelled.**")
+        except Exception:
+            pass
+        raise
+    except Exception as exc:
+        try:
+            await status.edit_text(
+                f"❌ **Rename failed**\n\n\`{str(exc)[:1000]}\`"
+            )
+        except Exception:
+            pass
+    finally:
+        clear_transfer_cancel(job.job_id)
+        shutil.rmtree(job.work_dir, ignore_errors=True)
+        await jobs.remove(job.job_id)
+
+
 async def _process_named_job(client, message, job):
     action = job.selected_action
     text = message.text.strip()
@@ -124,43 +226,12 @@ async def _process_named_job(client, message, job):
             name = f"{_base_without_extension(_safe_filename(text))}.mp4"
         else:
             name = _safe_filename(text)
-            if not _extension(name) and source_ext: name = f"{name}.{source_ext}"
-            elif _extension(name) and source_ext: name = f"{_base_without_extension(name)}.{source_ext}"
+            if not _extension(name) and source_ext:
+                name = f"{name}.{source_ext}"
+            elif _extension(name) and source_ext:
+                name = f"{_base_without_extension(name)}.{source_ext}"
 
-        status = await _new_transfer_status(client, message, job, int((job.extra or {}).get("telegram_file_size", 0) or 0))
-        try:
-            await _download_source(client, message, job, status)
-
-            if video_mode:
-                prepared_path = os.path.join(job.work_dir, ".converted_video.mp4")
-                async def report(current, total):
-                    await _conversion_progress(current, total, status, job.job_id, name)
-                prepared = await prepare_video_for_telegram(job.input_path, prepared_path, report)
-                if not prepared or not os.path.isfile(prepared):
-                    raise RuntimeError("Could not convert the source into a Telegram-compatible MP4 video")
-                job.mime_type = "video/mp4"
-                results = await _deliver_output(client, job, prepared, name, status, prepared_video=True)
-            else:
-                output_path = os.path.join(job.work_dir, name)
-                os.replace(job.input_path, output_path)
-                results = await _deliver_output(client, job, output_path, name, status)
-
-            if not results: raise RuntimeError("Telegram returned no uploaded result")
-            size = int((job.extra or {}).get("downloaded_size", 0) or os.path.getsize(job.input_path if os.path.exists(job.input_path) else prepared if video_mode else output_path))
-            await db.update_usage(job.user_id, job.bot_id, size)
-            await mark_rename_completed(job.job_id)
-            await _finish_delivery(client, message, job, status)
-        except AniToonTransferCancelled:
-            try: await status.edit_text("❌ **Processing cancelled.**")
-            except Exception: pass
-        except asyncio.CancelledError:
-            try: await status.edit_text("❌ **Processing cancelled.**")
-            except Exception: pass
-        except Exception as exc:
-            try: await status.edit_text(f"❌ **Rename failed**\n\n`{str(exc)[:1000]}`")
-            except Exception: pass
-        finally:
-            clear_transfer_cancel(job.job_id); shutil.rmtree(job.work_dir, ignore_errors=True); await jobs.remove(job.job_id)
+        await process_custom_name_job(client, message, job, name)
 
 
 @Client.on_message(filters.private & filters.text, group=-1200)
