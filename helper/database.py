@@ -22,7 +22,7 @@ class Database:
 
     @staticmethod
     def new_user(user_id: int) -> dict:
-        return {"id": int(user_id), "join_date": datetime.utcnow(), "thumb": None, "caption": None, "rename_mode": "manual", "rename_template": "", "audio_name": DEFAULT_METADATA_NAME, "sub_name": DEFAULT_METADATA_NAME, "audio_prefix": None, "audio_language": None, "subtitle_prefix": None, "subtitle_language": None, "is_banned": False}
+        return {"id": int(user_id), "join_date": datetime.utcnow(), "thumb": None, "caption": None, "rename_mode": "manual", "rename_template": "", "thumbnail_mode": "none", "audio_name": DEFAULT_METADATA_NAME, "sub_name": DEFAULT_METADATA_NAME, "audio_prefix": None, "audio_language": None, "subtitle_prefix": None, "subtitle_language": None, "is_banned": False}
 
     async def add_user(self, user_id: int):
         await self.col.update_one({"id": int(user_id)}, {"$setOnInsert": self.new_user(user_id)}, upsert=True)
@@ -88,6 +88,16 @@ class Database:
         user = await self.col.find_one({"id": int(user_id)}, {"thumb": 1})
         return user.get("thumb") if user else None
 
+    async def set_thumbnail_mode(self, user_id: int, mode: str):
+        mode = str(mode).strip().lower()
+        if mode not in {"none", "auto", "custom"}:
+            raise ValueError("Invalid thumbnail mode")
+        await self.col.update_one({"id": int(user_id)}, {"$set": {"thumbnail_mode": mode}}, upsert=True)
+
+    async def get_thumbnail_mode(self, user_id: int) -> str:
+        user = await self.col.find_one({"id": int(user_id)}, {"thumbnail_mode": 1})
+        mode = str(user.get("thumbnail_mode", "none") if user else "none").strip().lower()
+        return mode if mode in {"none", "auto", "custom"} else "none"
     async def set_caption(self, user_id: int, caption: str | None):
         await self.col.update_one({"id": int(user_id)}, {"$set": {"caption": caption}}, upsert=True)
 
