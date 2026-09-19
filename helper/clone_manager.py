@@ -39,6 +39,7 @@ class CloneManager:
             BotCommand("viewthumb", "View your thumbnail"),
             BotCommand("delthumb", "Delete your thumbnail"),
             BotCommand("paysupport", "Payment support"),
+            BotCommand("renamesettings", "Rename mode and permanent text settings"),
         ]
 
         try:
