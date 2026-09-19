@@ -305,6 +305,12 @@ async def cb_settings_caption(
                 ],
                 [
                     InlineKeyboardButton(
+                        "✏️ Rename Mode",
+                        callback_data="rename_settings",
+                    )
+                ],
+                [
+                    InlineKeyboardButton(
                         "🔙 Back",
                         callback_data="settings",
                     )
