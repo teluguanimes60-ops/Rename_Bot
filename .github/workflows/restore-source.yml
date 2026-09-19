@@ -1,0 +1,56 @@
+name: Restore AniToon source files
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  restore-source:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Extract source files
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/anitoon-source
+          mkdir -p /tmp/anitoon-source
+          unzip -q AniToon_1Bot-source.zip -d /tmp/anitoon-source
+
+          SRC="/tmp/anitoon-source/AniToon_1Bot-main"
+
+          test -f "$SRC/bot.py"
+          test -f "$SRC/app.py"
+
+          rsync -a             --exclude='config.py'             --exclude='helper/admin_access.py'             --exclude='plugins/admin.py'             --exclude='plugins/owner_only_admin.py'             --exclude='rename_router.py'             "$SRC/" ./
+
+          printf '3.11.8\n' > .python-version
+          cp "$SRC/requirements.txt" requirements.txt
+
+      - name: Commit restored source
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add -A
+
+          if git diff --cached --quiet; then
+            echo "No source changes to commit."
+            exit 0
+          fi
+
+          git commit -m "Restore complete AniToon application source"
+          git push origin HEAD:main
