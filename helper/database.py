@@ -22,7 +22,7 @@ class Database:
 
     @staticmethod
     def new_user(user_id: int) -> dict:
-        return {"id": int(user_id), "join_date": datetime.utcnow(), "thumb": None, "caption": None, "audio_name": DEFAULT_METADATA_NAME, "sub_name": DEFAULT_METADATA_NAME, "audio_prefix": None, "audio_language": None, "subtitle_prefix": None, "subtitle_language": None, "is_banned": False}
+        return {"id": int(user_id), "join_date": datetime.utcnow(), "thumb": None, "caption": None, "rename_mode": "manual", "rename_template": "", "audio_name": DEFAULT_METADATA_NAME, "sub_name": DEFAULT_METADATA_NAME, "audio_prefix": None, "audio_language": None, "subtitle_prefix": None, "subtitle_language": None, "is_banned": False}
 
     async def add_user(self, user_id: int):
         await self.col.update_one({"id": int(user_id)}, {"$setOnInsert": self.new_user(user_id)}, upsert=True)
@@ -95,6 +95,24 @@ class Database:
         user = await self.col.find_one({"id": int(user_id)}, {"caption": 1})
         return user.get("caption") if user else None
 
+    async def set_rename_mode(self, user_id: int, mode: str):
+        mode = str(mode).strip().lower()
+        if mode not in {"manual", "auto", "permanent"}:
+            raise ValueError("Invalid rename mode")
+        await self.col.update_one({"id": int(user_id)}, {"$set": {"rename_mode": mode}}, upsert=True)
+
+    async def get_rename_mode(self, user_id: int) -> str:
+        user = await self.col.find_one({"id": int(user_id)}, {"rename_mode": 1})
+        mode = str(user.get("rename_mode", "manual") if user else "manual").strip().lower()
+        return mode if mode in {"manual", "auto", "permanent"} else "manual"
+
+    async def set_rename_template(self, user_id: int, template: str | None):
+        value = str(template or "").strip()
+        await self.col.update_one({"id": int(user_id)}, {"$set": {"rename_template": value}}, upsert=True)
+
+    async def get_rename_template(self, user_id: int) -> str:
+        user = await self.col.find_one({"id": int(user_id)}, {"rename_template": 1})
+        return str(user.get("rename_template", "") if user else "").strip()
     async def set_audio_name(self, user_id: int, audio_name: str):
         await self.col.update_one({"id": int(user_id)}, {"$set": {"audio_name": str(audio_name)}}, upsert=True)
 
