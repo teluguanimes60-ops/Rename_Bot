@@ -79,6 +79,10 @@ def _legacy_parts(
         return default_prefix, default_language, ""
 
     # Old data stored "[AniToon] Japanese" in one field.
+    if text.lower().startswith("[anitoon]"):
+        remainder = text[len("[AniToon]"):].strip()
+        return default_prefix, remainder or default_language, ""
+
     if text.startswith("[") and "]" in text:
         end = text.find("]") + 1
         return text[:end].strip(), text[end:].strip() or default_language, ""
