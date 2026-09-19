@@ -34,7 +34,14 @@ def help_menu():
 
 
 def thumbnail_menu():
-    return InlineKeyboardMarkup([[InlineKeyboardButton("👁 View Thumbnail", callback_data="view_thumb")], [InlineKeyboardButton("🗑 Delete Thumbnail", callback_data="delete_thumb")], [InlineKeyboardButton("🔙 Back", callback_data="settings")]])
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("🚫 No Thumbnail", callback_data="thumb_mode:none")],
+        [InlineKeyboardButton("🤖 Auto Thumbnail", callback_data="thumb_mode:auto")],
+        [InlineKeyboardButton("🖼 Custom Permanent", callback_data="thumb_mode:custom")],
+        [InlineKeyboardButton("👁 View Custom", callback_data="view_thumb")],
+        [InlineKeyboardButton("🗑 Delete Custom", callback_data="delete_thumb")],
+        [InlineKeyboardButton("🔙 Back", callback_data="settings")],
+    ])
 
 
 def file_action_menu(job_id: str):
