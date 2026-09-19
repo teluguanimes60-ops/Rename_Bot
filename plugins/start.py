@@ -232,13 +232,26 @@ async def start(client: Client, message: Message):
                 target_bot_id = int(message.command[1].split("_", 1)[1])
             except (ValueError, IndexError):
                 target_bot_id = bot_id
-            buttons = [[InlineKeyboardButton(f"{plan.name} — {plan.stars} ⭐", callback_data=f"buy:{plan.key}:{target_bot_id}")] for plan in all_paid_plans()]
+            from helper.plans import all_paid_plans, get_plan
+            buttons = [
+                [InlineKeyboardButton(f"{plan.name} — {plan.stars} ⭐", callback_data=f"buy:{plan.key}:{target_bot_id}")]
+                for plan in all_paid_plans()
+            ]
             buttons.append([InlineKeyboardButton("⬅️ Back", callback_data="start")])
+            free_plan = get_plan("free")
+            lines = [
+                "💎 **AniToon Premium Plans**",
+                "",
+                "Choose a plan for 30 days:",
+                "",
+                f"🆓 **Free** — 0 ⭐ — {free_plan.daily_limit / (1024**3):g} GB/day",
+            ]
+            for plan in all_paid_plans():
+                lines.append(f"{plan.name} — {plan.stars} ⭐ / {plan.days} days — {plan.daily_limit / (1024**3):g} GB/day")
+            lines.append("")
+            lines.append("⭐ Payment is handled by AniToon_1Bot.")
             await message.reply_text(
-                "💎 **AniToon Premium Plans**\n\nChoose a plan for 30 days:\n\n"
-                "🆓 **Free** — 0 ⭐ — 10 GB/day\n⚡ **Pro** — 10 ⭐ — 20 GB/day\n"
-                "💎 **Premium** — 20 ⭐ — 40 GB/day\n👑 **Ultra** — 30 ⭐ — 60 GB/day\n\n"
-                "⭐ Payment is handled by AniToon_1Bot.",
+                "\n".join(lines),
                 reply_markup=InlineKeyboardMarkup(buttons),
             )
             return
