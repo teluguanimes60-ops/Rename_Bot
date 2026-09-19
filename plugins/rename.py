@@ -17,7 +17,8 @@ from helper.database import db
 from helper.ffmpeg import convert_media, fix_metadata, get_video_info, inspect_media_streams, remux_with_track_names, take_screenshot
 from helper.job_state import Job, jobs
 from helper.job_transfer import download_job
-from helper.metadata import get_metadata
+from helper.metadata import get_metadata, language_name
+from helper.thumbnail_manager import resolve_thumbnail
 from helper.plans import get_plan
 from helper.splitter import split_file
 from helper.utils import humanbytes, progress_for_pyrogram
@@ -146,8 +147,21 @@ async def _apply_metadata_settings(job: Job, output_path: str) -> None:
         if not any(item["type"] in {"audio", "subtitle"} for item in streams):
             return
         settings = await get_metadata(job.user_id)
+        titles = {}
+        audio_index = subtitle_index = 0
+        for stream in streams:
+            if stream["type"] == "audio":
+                lang = language_name(stream.get("language"), settings.audio_language)
+                titles[f"audio:{audio_index}"] = " ".join(x for x in (settings.audio_prefix, lang, settings.audio_suffix) if x).strip()
+                audio_index += 1
+            elif stream["type"] == "subtitle":
+                lang = language_name(stream.get("language"), settings.subtitle_language)
+                titles[f"subtitle:{subtitle_index}"] = " ".join(x for x in (settings.subtitle_prefix, lang, settings.subtitle_suffix) if x).strip()
+                subtitle_index += 1
+        if not titles:
+            return
         temp = os.path.join(job.work_dir, ".metadata_applied." + os.path.basename(output_path))
-        if await fix_metadata(output_path, temp, settings.audio_name, settings.subtitle_name) and os.path.isfile(temp) and os.path.getsize(temp) > 0:
+        if await remux_with_track_names(output_path, temp, titles) and os.path.isfile(temp) and os.path.getsize(temp) > 0:
             os.replace(temp, output_path)
         elif temp and os.path.exists(temp):
             os.remove(temp)
@@ -195,9 +209,12 @@ async def _finish_job(client, message: Message, job: Job, output_path: str, outp
             duration = width = height = 0
             if (job.mime_type or "").startswith("video/") or _extension(output_name) == "mp4":
                 duration, width, height = await get_video_info(output_path)
-            thumb = await db.get_thumbnail(job.user_id)
-            if not thumb and duration:
-                thumb = await take_screenshot(output_path, os.path.join(job.work_dir, "thumb.jpg"), duration)
+            thumb, temporary_thumb = await resolve_thumbnail(
+                client,
+                job,
+                output_path,
+                duration,
+            )
             parts = [output_path]
             if os.path.getsize(output_path) > 2_000_000_000:
                 await status.edit_text("✂️ **Large file detected. Splitting into parts...**")
@@ -218,6 +235,11 @@ async def _finish_job(client, message: Message, job: Job, output_path: str, outp
         except Exception as exc:
             await status.edit_text(f"❌ **Processing failed**\n\n`{str(exc)[:1000]}`")
         finally:
+            if 'temporary_thumb' in locals() and temporary_thumb:
+                try:
+                    os.remove(temporary_thumb)
+                except OSError:
+                    pass
             shutil.rmtree(job.work_dir, ignore_errors=True)
             await jobs.remove(job.job_id)
     finally:
