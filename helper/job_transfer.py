@@ -236,11 +236,17 @@ async def upload_job(client: Client, job: Job, path: str, filename: str, status:
                 "supports_streaming": True,
             })
             thumb = None
+            temporary_thumbnail = None
             try:
-                from helper.database import db
-                thumb = await db.get_thumbnail(job.user_id)
+                from helper.thumbnail_manager import resolve_thumbnail
+                thumb, temporary_thumbnail = await resolve_thumbnail(
+                    client,
+                    job,
+                    upload_path,
+                    duration,
+                )
             except Exception:
-                thumb = None
+                thumb, temporary_thumbnail = None, None
             if thumb:
                 kwargs["thumb"] = thumb
             try:
@@ -300,6 +306,20 @@ async def upload_job(client: Client, job: Job, path: str, filename: str, status:
 
         ext = os.path.splitext(filename)[1].lower()
         mime = (job.mime_type or "").lower()
+        thumb = None
+        temporary_thumbnail = None
+        try:
+            from helper.thumbnail_manager import resolve_thumbnail
+            thumb, temporary_thumbnail = await resolve_thumbnail(
+                client,
+                job,
+                upload_path,
+                0,
+            )
+        except Exception:
+            thumb, temporary_thumbnail = None, None
+        if thumb:
+            kwargs["thumb"] = thumb
         if mime.startswith("audio/") or ext in {".mp3", ".m4a", ".aac", ".flac", ".ogg", ".wav", ".opus"}:
             return await _send_with_floodwait_retry(
                 client.send_audio,
@@ -314,11 +334,12 @@ async def upload_job(client: Client, job: Job, path: str, filename: str, status:
             **kwargs,
         )
     finally:
-        if temporary_streamable and temporary_streamable != path:
-            try:
-                os.remove(temporary_streamable)
-            except OSError:
-                pass
+        for _temp in (temporary_thumbnail, temporary_streamable):
+            if _temp and _temp != path:
+                try:
+                    os.remove(_temp)
+                except OSError:
+                    pass
         await unregister_task(job.job_id, task)
         if acquired:
             jobs.release()
