@@ -8,6 +8,28 @@ DEFAULT_PREFIX = "@anitoon_edit"
 DEFAULT_AUDIO_LANGUAGE = "Japanese"
 DEFAULT_SUBTITLE_LANGUAGE = "English"
 
+LANGUAGE_NAMES = {
+    "en": "English", "eng": "English",
+    "ja": "Japanese", "jpn": "Japanese",
+    "ko": "Korean", "kor": "Korean",
+    "zh": "Chinese", "zho": "Chinese", "chi": "Chinese",
+    "hi": "Hindi", "hin": "Hindi",
+    "te": "Telugu", "tel": "Telugu",
+    "ta": "Tamil", "tam": "Tamil",
+    "ml": "Malayalam", "mal": "Malayalam",
+    "fr": "French", "fra": "French",
+    "de": "German", "deu": "German",
+    "es": "Spanish", "spa": "Spanish",
+    "it": "Italian", "ita": "Italian",
+    "pt": "Portuguese", "por": "Portuguese",
+    "ru": "Russian", "rus": "Russian",
+    "ar": "Arabic", "ara": "Arabic",
+}
+
+def language_name(language: str | None, fallback: str) -> str:
+    value = str(language or "").strip()
+    return LANGUAGE_NAMES.get(value.lower(), value if value and value.lower() != "und" else fallback)
+
 
 @dataclass(frozen=True)
 class MetadataSettings:
