@@ -22,7 +22,8 @@ def main_menu(is_main_bot: bool = True, is_owner: bool = False):
 
 def settings_menu():
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("📝 Caption", callback_data="settings_caption"), InlineKeyboardButton("🖼 Thumbnail", callback_data="settings_thumb")],
+        [InlineKeyboardButton("✏️ Rename Mode", callback_data="rename_settings"), InlineKeyboardButton("📝 Caption", callback_data="settings_caption")],
+        [InlineKeyboardButton("🖼 Thumbnail", callback_data="settings_thumb")],
         [InlineKeyboardButton("🏷 Metadata", callback_data="metadata_settings"), InlineKeyboardButton("💎 Plan", callback_data="upgrade")],
         [InlineKeyboardButton("🔙 Back", callback_data="start")],
     ])
