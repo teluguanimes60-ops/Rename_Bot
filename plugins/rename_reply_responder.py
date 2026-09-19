@@ -124,10 +124,10 @@ async def process_custom_name_job(client, message, job, name: str):
 
     safe_name = _safe_filename(name)
     if video_mode:
-        safe_name = f"\{_base_without_extension(safe_name)}.mp4"
+        safe_name = f"{_base_without_extension(safe_name)}.mp4"
     else:
         if not _extension(safe_name) and source_ext:
-            safe_name = f"\{safe_name}.\{source_ext}"
+            safe_name = f"{safe_name}.{source_ext}"
         elif _extension(safe_name) and source_ext:
             safe_name = f"\{_base_without_extension(safe_name)}.\{source_ext}"
 
@@ -143,14 +143,6 @@ async def process_custom_name_job(client, message, job, name: str):
         if video_mode:
             prepared_path = os.path.join(job.work_dir, ".converted_video.mp4")
 
-            async def report(current, total):
-                await _conversion_progress(
-                    current,
-                    total,
-                    status,
-                    job.job_id,
-                    safe_name,
-                )
 
             # Rename-to-video must not display a separate conversion stage.
             # The preparation step never resizes the video; it stream-copies
