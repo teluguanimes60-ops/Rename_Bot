@@ -359,6 +359,45 @@ async def cb_settings_thumb(
 
 
 # ============================================================
+# THUMBNAIL MODE
+# ============================================================
+
+@Client.on_callback_query(
+    filters.regex(r"^thumb_mode:(none|auto|custom)$"),
+    group=-2500,
+)
+async def cb_thumbnail_mode(
+    client: Client,
+    callback_query,
+):
+    mode = callback_query.matches[0].group(1)
+    user_id = int(callback_query.from_user.id)
+
+    if mode == "custom" and not await db.get_thumbnail(user_id):
+        await callback_query.answer(
+            "Send an image first to save your Custom Permanent thumbnail.",
+            show_alert=True,
+        )
+        await client.send_message(
+            user_id,
+            "🖼 **Custom Permanent Thumbnail**\n\n"
+            "Send me an image now. It will be saved and used for your processed files and videos until you change the mode.",
+        )
+        return
+
+    await db.set_thumbnail_mode(user_id, mode)
+    await callback_query.answer("Thumbnail mode updated ✅", show_alert=True)
+    mode_text = {
+        "none": "🚫 No Thumbnail",
+        "auto": "🤖 Auto Thumbnail",
+        "custom": "🖼 Custom Permanent",
+    }[mode]
+    await edit_callback_message(
+        callback_query,
+        f"✅ **Thumbnail mode changed**\n\nCurrent mode: **{mode_text}**",
+        reply_markup=thumbnail_menu(),
+    )
+# ============================================================
 # VIEW THUMBNAIL
 # ============================================================
 
