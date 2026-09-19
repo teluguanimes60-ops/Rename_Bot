@@ -10,13 +10,45 @@ from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from helper.activity_log import mark_rename_completed
 from helper.cancel_manager import register_task, unregister_task
 from helper.database import db
-from helper.ffmpeg import convert_media, prepare_video_for_telegram
+from helper.ffmpeg import convert_media, inspect_media_streams, prepare_video_for_telegram, remux_with_track_names
 from helper.job_state import jobs
 from helper.job_transfer import download_job
 from helper.message_cleanup import protect_result, protect_transfer_message
 from helper.utils import AniToonTransferCancelled, clear_transfer_cancel, humanbytes, progress_for_pyrogram, reset_progress
 from plugins.file_action_fix import _deliver_output
 from plugins.rename import _base_without_extension, _extension, _safe_filename
+async def _apply_metadata_settings(job, output_path: str) -> None:
+    """Apply prefix + language + suffix to every audio/subtitle track without re-encoding."""
+    if not os.path.isfile(output_path):
+        return
+    video_exts = {".mp4", ".mkv", ".webm", ".mov", ".avi", ".flv", ".ts", ".m4v"}
+    if os.path.splitext(output_path)[1].lower() not in video_exts:
+        return
+    try:
+        streams = await inspect_media_streams(output_path)
+        if not streams:
+            return
+        from helper.metadata import get_metadata
+        settings = await get_metadata(job.user_id)
+        titles = {}
+        audio_index = subtitle_index = 0
+        for stream in streams:
+            if stream["type"] == "audio":
+                titles[f"audio:{audio_index}"] = settings.audio_name
+                audio_index += 1
+            elif stream["type"] == "subtitle":
+                titles[f"subtitle:{subtitle_index}"] = settings.subtitle_name
+                subtitle_index += 1
+        if not titles:
+            return
+        temp = os.path.join(job.work_dir, ".metadata_" + os.path.basename(output_path))
+        if await remux_with_track_names(output_path, temp, titles) and os.path.isfile(temp) and os.path.getsize(temp) > 0:
+            os.replace(temp, output_path)
+        elif os.path.exists(temp):
+            os.remove(temp)
+    except Exception:
+        return
+
 
 NAME_ACTIONS = {"custom_name", "convert_name"}
 
@@ -133,6 +165,7 @@ async def process_custom_name_job(client, message, job, name: str):
                     "Could not convert the source into a Telegram-compatible MP4 video"
                 )
             job.mime_type = "video/mp4"
+            await _apply_metadata_settings(job, prepared)
             results = await _deliver_output(
                 client,
                 job,
@@ -145,6 +178,7 @@ async def process_custom_name_job(client, message, job, name: str):
         else:
             output_path = os.path.join(job.work_dir, safe_name)
             os.replace(job.input_path, output_path)
+            await _apply_metadata_settings(job, output_path)
             results = await _deliver_output(
                 client,
                 job,
@@ -203,6 +237,7 @@ async def _process_named_job(client, message, job):
             await _download_source(client, message, job, status)
             output_path = os.path.join(job.work_dir, name)
             if not await _convert_with_progress(job, status, output_path, ext, name): raise RuntimeError("FFmpeg conversion failed")
+            await _apply_metadata_settings(job, output_path)
             results = await _deliver_output(client, job, output_path, name, status)
             if not results: raise RuntimeError("Telegram returned no uploaded result")
             size = int((job.extra or {}).get("downloaded_size", 0) or os.path.getsize(job.input_path))
