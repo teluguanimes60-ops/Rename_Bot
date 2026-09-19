@@ -180,6 +180,7 @@ async def upload_job(client: Client, job: Job, path: str, filename: str, status:
     task = await register_task(job.job_id)
     upload_path = path
     temporary_streamable = None
+    temporary_thumbnail = None
     try:
         await jobs.acquire()
         acquired = True
@@ -321,18 +322,40 @@ async def upload_job(client: Client, job: Job, path: str, filename: str, status:
         if thumb:
             kwargs["thumb"] = thumb
         if mime.startswith("audio/") or ext in {".mp3", ".m4a", ".aac", ".flac", ".ogg", ".wav", ".opus"}:
+            try:
+                return await _send_with_floodwait_retry(
+                    client.send_audio,
+                    job.user_id,
+                    upload_path,
+                    **kwargs,
+                )
+            except Exception:
+                if "thumb" not in kwargs:
+                    raise
+                kwargs.pop("thumb", None)
+                return await _send_with_floodwait_retry(
+                    client.send_audio,
+                    job.user_id,
+                    upload_path,
+                    **kwargs,
+                )
+        try:
             return await _send_with_floodwait_retry(
-                client.send_audio,
+                client.send_document,
                 job.user_id,
                 upload_path,
                 **kwargs,
             )
-        return await _send_with_floodwait_retry(
-            client.send_document,
-            job.user_id,
-            upload_path,
-            **kwargs,
-        )
+        except Exception:
+            if "thumb" not in kwargs:
+                raise
+            kwargs.pop("thumb", None)
+            return await _send_with_floodwait_retry(
+                client.send_document,
+                job.user_id,
+                upload_path,
+                **kwargs,
+            )
     finally:
         for _temp in (temporary_thumbnail, temporary_streamable):
             if _temp and _temp != path:
