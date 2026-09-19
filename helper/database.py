@@ -22,7 +22,7 @@ class Database:
 
     @staticmethod
     def new_user(user_id: int) -> dict:
-        return {"id": int(user_id), "join_date": datetime.utcnow(), "thumb": None, "caption": None, "rename_mode": "manual", "rename_template": "", "thumbnail_mode": "none", "audio_name": DEFAULT_METADATA_NAME, "sub_name": DEFAULT_METADATA_NAME, "audio_prefix": None, "audio_language": None, "subtitle_prefix": None, "subtitle_language": None, "is_banned": False}
+        return {"id": int(user_id), "join_date": datetime.utcnow(), "thumb": None, "caption": None, "rename_mode": "manual", "rename_template": "", "thumbnail_mode": "none", "audio_name": DEFAULT_METADATA_NAME, "sub_name": DEFAULT_METADATA_NAME, "audio_prefix": None, "audio_language": None, "audio_suffix": "", "subtitle_prefix": None, "subtitle_language": None, "subtitle_suffix": "", "is_banned": False}
 
     async def add_user(self, user_id: int):
         await self.col.update_one({"id": int(user_id)}, {"$setOnInsert": self.new_user(user_id)}, upsert=True)
@@ -132,10 +132,25 @@ class Database:
     async def set_metadata(self, user_id: int, audio_name: str, subtitle_name: str):
         await self.col.update_one({"id": int(user_id)}, {"$set": {"audio_name": str(audio_name), "sub_name": str(subtitle_name)}}, upsert=True)
 
-    async def set_metadata_parts(self, user_id: int, *, audio_prefix: str, audio_language: str, subtitle_prefix: str, subtitle_language: str):
-        audio_prefix, audio_language = str(audio_prefix).strip(), str(audio_language).strip()
-        subtitle_prefix, subtitle_language = str(subtitle_prefix).strip(), str(subtitle_language).strip()
-        await self.col.update_one({"id": int(user_id)}, {"$set": {"audio_prefix": audio_prefix, "audio_language": audio_language, "subtitle_prefix": subtitle_prefix, "subtitle_language": subtitle_language, "audio_name": f"{audio_prefix} {audio_language}".strip(), "sub_name": f"{subtitle_prefix} {subtitle_language}".strip()}}, upsert=True)
+    async def set_metadata_parts(self, user_id: int, *, audio_prefix: str, audio_language: str, audio_suffix: str = "", subtitle_prefix: str, subtitle_language: str, subtitle_suffix: str = ""):
+        audio_prefix, audio_language, audio_suffix = str(audio_prefix or "").strip(), str(audio_language or "").strip(), str(audio_suffix or "").strip()
+        subtitle_prefix, subtitle_language, subtitle_suffix = str(subtitle_prefix or "").strip(), str(subtitle_language or "").strip(), str(subtitle_suffix or "").strip()
+        audio_name = " ".join(x for x in (audio_prefix, audio_language, audio_suffix) if x)
+        sub_name = " ".join(x for x in (subtitle_prefix, subtitle_language, subtitle_suffix) if x)
+        await self.col.update_one(
+            {"id": int(user_id)},
+            {"$set": {
+                "audio_prefix": audio_prefix,
+                "audio_language": audio_language,
+                "audio_suffix": audio_suffix,
+                "subtitle_prefix": subtitle_prefix,
+                "subtitle_language": subtitle_language,
+                "subtitle_suffix": subtitle_suffix,
+                "audio_name": audio_name,
+                "sub_name": sub_name,
+            }},
+            upsert=True,
+        )
 
     async def ban_user(self, user_id: int):
         await self.col.update_one({"id": int(user_id)}, {"$set": {"is_banned": True}}, upsert=True)
