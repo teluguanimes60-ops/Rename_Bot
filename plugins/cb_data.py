@@ -332,24 +332,25 @@ async def cb_settings_thumb(
     callback_query,
 ):
     await callback_query.answer()
-
-    thumb = await db.get_thumbnail(
-        callback_query.from_user.id
+    user_id = int(callback_query.from_user.id)
+    mode = await db.get_thumbnail_mode(user_id)
+    mode_names = {
+        "none": "🚫 No Thumbnail",
+        "auto": "🤖 Auto Thumbnail",
+        "custom": "🖼 Custom Permanent",
+    }
+    thumb = await db.get_thumbnail(user_id)
+    saved = "✅ Custom image saved" if thumb else "❌ No custom image saved"
+    text = (
+        "🖼 **Thumbnail Settings**\n\n"
+        f"**Current mode:** {mode_names.get(mode, mode_names['none'])}\n"
+        f"{saved}\n\n"
+        "**Modes**\n"
+        "🚫 No Thumbnail — no thumbnail is attached to files or videos.\n"
+        "🤖 Auto Thumbnail — use the video frame/source file thumbnail when available.\n"
+        "🖼 Custom Permanent — use your saved image on processed files and videos.\n\n"
+        "New users start with **No Thumbnail** by default."
     )
-
-    if thumb:
-        text = (
-            "🖼 **Thumbnail Settings**\n\n"
-            "✅ A custom thumbnail is currently saved.\n\n"
-            "Send a new image at any time to replace it."
-        )
-    else:
-        text = (
-            "🖼 **Thumbnail Settings**\n\n"
-            "❌ No custom thumbnail is saved.\n\n"
-            "Send an image to save one."
-        )
-
     await edit_callback_message(
         callback_query,
         text,
@@ -369,33 +370,19 @@ async def cb_view_thumb(
     callback_query,
 ):
     await callback_query.answer()
-
-    thumb = await db.get_thumbnail(
-        callback_query.from_user.id
-    )
-
+    thumb = await db.get_thumbnail(callback_query.from_user.id)
     if not thumb:
         return await edit_callback_message(
             callback_query,
             "❌ **No custom thumbnail is saved.**\n\n"
-            "Send an image to save one.",
-            reply_markup=InlineKeyboardMarkup(
-                [
-                    [
-                        InlineKeyboardButton(
-                            "🔙 Back",
-                            callback_data="settings",
-                        )
-                    ]
-                ]
-            ),
+            "Choose **Custom Permanent** and send an image.",
+            reply_markup=thumbnail_menu(),
         )
-
     try:
         await client.send_photo(
             callback_query.from_user.id,
             thumb,
-            caption="🖼 **Your current custom thumbnail.**",
+            caption="🖼 **Your current custom permanent thumbnail.**",
         )
     except Exception:
         await callback_query.message.reply_text(
@@ -414,29 +401,17 @@ async def cb_delete_thumb(
     client: Client,
     callback_query,
 ):
-    await db.set_thumbnail(
-        callback_query.from_user.id,
-        None,
-    )
-
+    await db.set_thumbnail(callback_query.from_user.id, None)
+    await db.set_thumbnail_mode(callback_query.from_user.id, "none")
     await callback_query.answer(
-        "Thumbnail deleted 🗑️",
+        "Custom thumbnail deleted. No Thumbnail mode restored ✅",
         show_alert=True,
     )
-
     await edit_callback_message(
         callback_query,
-        "🗑️ **Custom thumbnail deleted.**",
-        reply_markup=InlineKeyboardMarkup(
-            [
-                [
-                    InlineKeyboardButton(
-                        "⚙️ Settings",
-                        callback_data="settings",
-                    )
-                ]
-            ]
-        ),
+        "🗑️ **Custom thumbnail deleted.**\n\n"
+        "Current mode: **🚫 No Thumbnail**",
+        reply_markup=thumbnail_menu(),
     )
 
 
