@@ -173,14 +173,99 @@ async def rename_entry_fix(client, cb):
 async def rename_output_fix(client, cb):
     job = await jobs.get(cb.matches[0].group(1))
     if not job or job.user_id != cb.from_user.id:
-        await cb.answer("Job expired or not owned by you.", show_alert=True); raise StopPropagation
-    mode = cb.matches[0].group(2)
+        await cb.answer("Job expired or not owned by you.", show_alert=True)
+        raise StopPropagation
+
+    output_mode = cb.matches[0].group(2)
+    user_id = int(cb.from_user.id)
+    rename_mode = await db.get_rename_mode(user_id)
+
     await cb.answer()
-    await jobs.update(job.job_id, selected_action="custom_name", extra={**job.extra, "rename_output_mode": mode, "rename_menu_message_id": cb.message.id})
-    prompt = await _ask_name(client, job.user_id, "✏️ **Rename**\n\nSend the new filename.", job.job_id, "custom_name")
-    await jobs.update(job.job_id, extra={**job.extra, "rename_prompt_message_id": prompt.id, "prompt_message_id": prompt.id})
-    try: await cb.message.delete()
-    except Exception: pass
+    await jobs.update(
+        job.job_id,
+        selected_action="custom_name",
+        extra={**job.extra, "rename_output_mode": output_mode, "rename_menu_message_id": cb.message.id},
+    )
+
+    if rename_mode == "manual":
+        prompt = await _ask_name(
+            client,
+            job.user_id,
+            "✏️ **Rename**\n\nSend the new filename.",
+            job.job_id,
+            "custom_name",
+        )
+        await jobs.update(
+            job.job_id,
+            extra={**job.extra, "rename_prompt_message_id": prompt.id, "prompt_message_id": prompt.id},
+        )
+        try:
+            await cb.message.delete()
+        except Exception:
+            pass
+        raise StopPropagation
+
+    from helper.cancel_manager import register_task, unregister_task
+    from helper.ai_rename import ai_auto_name, apply_permanent_template
+
+    try:
+        if rename_mode == "auto":
+            status = await cb.message.reply_text("🤖 **Auto Rename**\n\nAnalyzing and cleaning the filename...")
+            name = await ai_auto_name(job.original_name)
+        elif rename_mode == "permanent":
+            template = await db.get_rename_template(user_id)
+            if not template:
+                await db.set_rename_mode(user_id, "manual")
+                await cb.message.reply_text("⚠️ No permanent text is saved, so this file will use Manual mode. Open Settings → Rename Mode to set one.")
+                await _ask_name(
+                    client,
+                    job.user_id,
+                    "✏️ **Rename**\n\nSend the new filename.",
+                    job.job_id,
+                    "custom_name",
+                )
+                try:
+                    await cb.message.delete()
+                except Exception:
+                    pass
+                raise StopPropagation
+            name = apply_permanent_template(template, job.original_name)
+            status = await cb.message.reply_text(f"🏷 **Permanent Rename**\n\nNew name: `{name}`")
+        else:
+            await cb.message.reply_text("⚠️ Unknown rename mode. Manual mode will be used.")
+            await _ask_name(
+                client,
+                job.user_id,
+                "✏️ **Rename**\n\nSend the new filename.",
+                job.job_id,
+                "custom_name",
+            )
+            raise StopPropagation
+
+        # Remove the action-menu message before processing so the chat
+        # contains only the live transfer status and final result.
+        try:
+            await cb.message.delete()
+        except Exception:
+            pass
+
+        await jobs.update(
+            job.job_id,
+            extra={**job.extra, "name_submitted": True, "auto_name": name},
+        )
+        task = await register_task(job.job_id)
+        try:
+            from plugins.rename_reply_responder import process_custom_name_job
+            await process_custom_name_job(client, cb.message, job, name)
+        finally:
+            await unregister_task(job.job_id, task)
+    except StopPropagation:
+        raise
+    except Exception as exc:
+        try:
+            await cb.message.reply_text(f"❌ **Rename mode failed**\n\n`{str(exc)[:1000]}`")
+        except Exception:
+            pass
     raise StopPropagation
 
 
