@@ -208,6 +208,7 @@ async def upload_job(client: Client, job: Job, path: str, filename: str, status:
         kwargs = {
             "progress": progress_for_pyrogram,
             "progress_args": ("Uploading", status, started, job.job_id),
+            "caption": f"✅ **AniToon Processed**\n\n📂 `{filename}`\n📦 `{humanbytes(size)}`",
         }
         if as_video:
             from helper.ffmpeg import get_video_info
@@ -285,7 +286,7 @@ async def upload_job(client: Client, job: Job, path: str, filename: str, status:
                         f"document fallback failed: {fallback_exc}"
                     ) from fallback_exc
 
-                kwargs["caption"] = f"✅ **AniToon Processed**\n\n📂 `{filename}`\n📦 `{humanbytes(size)}`"
+
         ext = os.path.splitext(filename)[1].lower()
         mime = (job.mime_type or "").lower()
         if mime.startswith("audio/") or ext in {".mp3", ".m4a", ".aac", ".flac", ".ogg", ".wav", ".opus"}:
