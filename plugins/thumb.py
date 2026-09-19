@@ -34,6 +34,7 @@ async def save_photo(
             user_id,
             message.photo.file_id,
         )
+        await db.set_thumbnail_mode(user_id, "custom")
 
         await status.edit_text(
             "✅ **Thumbnail Saved Successfully!**\n\n"
@@ -127,6 +128,7 @@ async def delete_thumbnail(
         user_id,
         None,
     )
+    await db.set_thumbnail_mode(user_id, "none")
 
     await message.reply_text(
         "🗑️ **Custom Thumbnail Deleted.**\n\n"
