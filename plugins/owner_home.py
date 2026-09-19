@@ -1,7 +1,10 @@
+
 from pyrogram import Client, StopPropagation, filters
 from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from config import Config
+from helper.owner_action_router import clear_pending
+from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 
 def is_owner(user_id: int) -> bool:
@@ -10,9 +13,17 @@ def is_owner(user_id: int) -> bool:
 
 def owner_keyboard():
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("🛠 Help", callback_data="help"), InlineKeyboardButton("⚙️ Settings", callback_data="settings")],
+        [
+            InlineKeyboardButton("🛠 Help", callback_data="help"),
+            InlineKeyboardButton("⚙️ Settings", callback_data="settings"),
+        ],
         [InlineKeyboardButton("✏️ Rename", callback_data="start_rename")],
-        [InlineKeyboardButton("🤖 Create Your Own Clone Bot", callback_data="create_clone")],
+        [
+            InlineKeyboardButton(
+                "🤖 Create Your Own Clone Bot",
+                callback_data="create_clone",
+            )
+        ],
         [InlineKeyboardButton("👑 Owner Panel", callback_data="owner:panel")],
     ])
 
@@ -20,16 +31,22 @@ def owner_keyboard():
 def panel_keyboard():
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("📊 Statistics", callback_data="owner:stats")],
-        [InlineKeyboardButton("💎 Plans & Stars", callback_data="owner:plans")],
+        [
+            InlineKeyboardButton("💎 Plans", callback_data="owner:plans"),
+            InlineKeyboardButton("⭐ Stars", callback_data="owner:stars"),
+        ],
         [InlineKeyboardButton("🤖 Bot Details", callback_data="owner:bots")],
-        [InlineKeyboardButton("📣 Broadcast Users", callback_data="owner:broadcast")],
+        [InlineKeyboardButton("📣 Broadcast", callback_data="owner:broadcast")],
         [InlineKeyboardButton("🔙 Home", callback_data="start")],
     ])
 
 
 async def show_owner_home(message):
     await message.edit_text(
-        "🔥 **Welcome to AniToon Bot** 🔥\n\n👑 **Owner access detected**\n⚡ Unlimited owner access\n\nUse the owner controls below.",
+        "🔥 **Welcome to AniToon Bot** 🔥\n\n"
+        "👑 **Owner access detected**\n"
+        "⚡ Unlimited owner access\n\n"
+        "Use the owner controls below.",
         reply_markup=owner_keyboard(),
     )
 
@@ -38,8 +55,12 @@ async def show_owner_home(message):
 async def owner_start_page(client, message):
     if not getattr(client, "is_main_bot", False) or not is_owner(message.from_user.id):
         return
+    clear_pending(message.from_user.id)
     await message.reply_text(
-        "🔥 **Welcome to AniToon Bot** 🔥\n\n👑 **Owner access detected**\n⚡ Unlimited owner access\n\nUse the owner controls below.",
+        "🔥 **Welcome to AniToon Bot** 🔥\n\n"
+        "👑 **Owner access detected**\n"
+        "⚡ Unlimited owner access\n\n"
+        "Use the owner controls below.",
         reply_markup=owner_keyboard(),
     )
     raise StopPropagation
@@ -50,30 +71,40 @@ async def owner_panel_entry(client, callback_query):
     if not getattr(client, "is_main_bot", False) or not is_owner(callback_query.from_user.id):
         await callback_query.answer("Owner access only.", show_alert=True)
         raise StopPropagation
+
+    clear_pending(callback_query.from_user.id)
     await callback_query.answer()
     await callback_query.message.edit_text(
-        "👑 **AniToon Owner Panel**\n\nOnly `Config.OWNER_ID` can use these controls.",
+        "👑 **AniToon Owner Panel**\n\n"
+        "Use a button below or the matching owner command.",
         reply_markup=panel_keyboard(),
     )
     raise StopPropagation
 
 
-@Client.on_callback_query(filters.regex(r"^owner:(stats|plans|bots|broadcast)$"), group=-300)
-async def owner_panel_help(client, callback_query):
+@Client.on_callback_query(
+    filters.regex(r"^owner:(stats|plans|bots|broadcast)$"),
+    group=-300,
+)
+async def owner_panel_fallback(client, callback_query):
     if not getattr(client, "is_main_bot", False) or not is_owner(callback_query.from_user.id):
         await callback_query.answer("Owner access only.", show_alert=True)
         raise StopPropagation
+
     await callback_query.answer()
     action = callback_query.matches[0].group(1)
-    if action == "stats":
-        text = "📊 **Statistics**\n\nUse `/users` for total users and `/user <id>` for detailed user information."
-    elif action == "plans":
-        text = "💎 **Plans & Stars**\n\nUse `/ownerplans` to view plans.\nUse `/ownerstars <pro|premium|ultra> <stars>` to change a price.\nUse `/ownerlimit <pro|premium|ultra> <gb>` to change a daily limit."
-    elif action == "bots":
-        text = "🤖 **Bot Details**\n\nUse `/ownerbots` to view registered clone bots and their status."
-    else:
-        text = "📣 **Broadcast Users**\n\nReply to the message you want to send and use `/broadcast`."
-    await callback_query.message.edit_text(text, reply_markup=panel_keyboard())
+
+    text = {
+        "stats": "📊 **Statistics**\n\nUse /users or /stats.",
+        "plans": "💎 **Plans**\n\nUse /plans or /ownerplans.",
+        "bots": "🤖 **Bot Details**\n\nUse /botdetails or /ownerbots.",
+        "broadcast": "📣 **Broadcast**\n\nReply to a message and use /broadcast.",
+    }[action]
+
+    await callback_query.message.edit_text(
+        text,
+        reply_markup=panel_keyboard(),
+    )
     raise StopPropagation
 
 
@@ -81,6 +112,8 @@ async def owner_panel_help(client, callback_query):
 async def owner_home_callback(client, callback_query):
     if not getattr(client, "is_main_bot", False) or not is_owner(callback_query.from_user.id):
         return
+
+    clear_pending(callback_query.from_user.id)
     await callback_query.answer()
     await show_owner_home(callback_query.message)
     raise StopPropagation
