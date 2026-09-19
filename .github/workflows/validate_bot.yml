@@ -30,4 +30,8 @@ jobs:
             plugins/thumb.py \
             plugins/metadata.py \
             helper/thumbnail_manager.py \
-            helper/metadata.py
+            helper/metadata.py \
+            helper/ffmpeg.py \
+            plugins/start.py \
+            plugins/premium.py \
+            plugins/rename.py
