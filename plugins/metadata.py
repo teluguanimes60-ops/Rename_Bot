@@ -24,13 +24,13 @@ def _show(value: str) -> str:
 def _text(settings: MetadataSettings) -> str:
     return (
         "🏷 **Metadata Settings**\n\n"
-        "The bot adds the prefix/suffix around the language name inside audio and subtitle track names.\n\n"
+        "The bot keeps the language name visible for every audio/subtitle track and adds your prefix and suffix around it.\n\n"
         f"🎵 **Audio:** `{settings.audio_name}`\n"
         f"📜 **Subtitle:** `{settings.subtitle_name}`\n\n"
-        "Language is always kept in the final track name.\n\n"
-        "Default audio: `@anitoon_edit Japanese`\n"
-        "Default subtitle: `@anitoon_edit English`\n\n"
-        "Choose a track to edit its Prefix, Language, or Suffix."
+        "Default prefix: `@anitoon_edit`\n"
+        "Audio fallback language: `Japanese`\n"
+        "Subtitle fallback language: `English`\n\n"
+        "Choose a track to change only its Prefix or Suffix."
     )
 
 
@@ -55,7 +55,6 @@ def _section_text(kind: str, settings: MetadataSettings) -> str:
 def _section_keyboard(kind: str) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("🏷 Change Prefix", callback_data=f"metaedit:{kind}:prefix")],
-        [InlineKeyboardButton("🌐 Change Language", callback_data=f"metaedit:{kind}:language")],
         [InlineKeyboardButton("🏷 Change Suffix", callback_data=f"metaedit:{kind}:suffix")],
         [
             InlineKeyboardButton("🚫 Remove Prefix", callback_data=f"metaclear:{kind}:prefix"),
@@ -95,7 +94,7 @@ async def cb_metadata_section(client: Client, cb):
     raise StopPropagation
 
 
-@Client.on_callback_query(filters.regex(r"^metaedit:(audio|subtitle):(prefix|language|suffix)$"), group=-3000)
+@Client.on_callback_query(filters.regex(r"^metaedit:(audio|subtitle):(prefix|suffix)$"), group=-3000)
 async def cb_metadata_edit(client: Client, cb):
     kind = cb.matches[0].group(1)
     field = cb.matches[0].group(2)
@@ -103,13 +102,11 @@ async def cb_metadata_edit(client: Client, cb):
     if kind == "audio":
         value = {
             "prefix": settings.audio_prefix,
-            "language": settings.audio_language,
             "suffix": settings.audio_suffix,
         }[field]
     else:
         value = {
             "prefix": settings.subtitle_prefix,
-            "language": settings.subtitle_language,
             "suffix": settings.subtitle_suffix,
         }[field]
     await cb.answer()
@@ -117,7 +114,7 @@ async def cb_metadata_edit(client: Client, cb):
         cb.from_user.id,
         f"⌨️ **Change {kind.title()} {field.title()}**\n\n"
         f"Current: `{_show(value)}`\n\n"
-        "Send the new value. For Prefix/Suffix send `-` to remove it. Language cannot be empty.",
+        "Send the new value. Send `-` to remove the Prefix or Suffix.",
         reply_markup=ForceReply(selective=True),
     )
     await db.col.update_one(
@@ -159,9 +156,7 @@ async def handle_meta_replies(client: Client, message: Message):
     field = str(prompt.get("field", ""))
     if field in {"prefix", "suffix"} and value == "-":
         value = ""
-    if field == "language" and not value:
-        await message.reply_text("❌ Language cannot be empty.")
-        return
+
     try:
         settings = await update_metadata_part(user_id, kind, field, value)
     except Exception as exc:
