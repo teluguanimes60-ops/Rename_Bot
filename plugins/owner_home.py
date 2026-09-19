@@ -1,10 +1,8 @@
-
 from pyrogram import Client, StopPropagation, filters
 from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from config import Config
-from helper.owner_action_router import clear_pending
-from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+from plugins.owner_action_router import clear_pending
 
 
 def is_owner(user_id: int) -> bool:
