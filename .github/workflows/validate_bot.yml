@@ -26,4 +26,8 @@ jobs:
             plugins/cb_data.py \
             plugins/rename_settings.py \
             plugins/file_action_fix.py \
-            plugins/rename_reply_responder.py
+            plugins/rename_reply_responder.py \
+            plugins/thumb.py \
+            plugins/metadata.py \
+            helper/thumbnail_manager.py \
+            helper/metadata.py
