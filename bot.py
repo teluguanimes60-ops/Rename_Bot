@@ -34,6 +34,7 @@ BOT_COMMANDS = [
     BotCommand("delthumb", "Delete your thumbnail"),
     BotCommand("paysupport", "Payment support"),
     BotCommand("clone", "Create a clone bot"),
+    BotCommand("renamesettings", "Rename mode and permanent text settings"),
 ]
 
 
