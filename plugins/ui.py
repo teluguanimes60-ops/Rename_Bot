@@ -10,14 +10,18 @@ def force_sub_menu():
 
 def main_menu(is_main_bot: bool = True, is_owner: bool = False):
     """Home screen matching the requested layout."""
-    return InlineKeyboardMarkup([
+    rows = [
         [
             InlineKeyboardButton("🛠 Help", callback_data="help"),
             InlineKeyboardButton("⚙️ Settings", callback_data="settings"),
         ],
         [InlineKeyboardButton("✏️ Rename", callback_data="start_rename")],
-        [InlineKeyboardButton("🤖 Create Your Own Clone Bot", callback_data="create_clone")],
-    ])
+    ]
+    if is_main_bot:
+        rows.append(
+            [InlineKeyboardButton("🤖 Create Your Own Clone Bot", callback_data="create_clone")]
+        )
+    return InlineKeyboardMarkup(rows)
 
 
 def settings_menu():
