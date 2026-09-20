@@ -12,7 +12,7 @@ from helper.cancel_manager import register_task, unregister_task
 from helper.database import db
 from helper.ffmpeg import convert_media, inspect_media_streams
 from helper.job_state import jobs
-from helper.job_transfer import download_job
+from helper.job_transfer import download_job, send_completion_notice
 from helper.message_cleanup import protect_result, protect_transfer_message
 from helper.utils import AniToonTransferCancelled, clear_transfer_cancel, humanbytes, progress_for_pyrogram, reset_progress
 from plugins.file_action_fix import _deliver_output
@@ -134,6 +134,7 @@ async def process_custom_name_job(client, message, job, name: str):
         )
         await db.update_usage(job.user_id, job.bot_id, size)
         await mark_rename_completed(job.job_id)
+        await send_completion_notice(client, job.user_id, parts=len(results))
         await _finish_delivery(client, message, job, status)
         return results
     except AniToonTransferCancelled:
@@ -176,6 +177,7 @@ async def _process_named_job(client, message, job):
             size = int((job.extra or {}).get("downloaded_size", 0) or os.path.getsize(job.input_path))
             await db.update_usage(job.user_id, job.bot_id, size)
             await mark_rename_completed(job.job_id)
+            await send_completion_notice(client, job.user_id, parts=len(results))
             await _finish_delivery(client, message, job, status)
         except AniToonTransferCancelled:
             try: await status.edit_text("❌ **Processing cancelled.**")
