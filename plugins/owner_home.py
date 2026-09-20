@@ -39,12 +39,40 @@ def panel_keyboard():
     ])
 
 
-async def show_owner_home(message):
-    await message.edit_text(
+async def _owner_home_text(client, user_id: int) -> str:
+    bot_id = int(getattr(client, "bot_id", 0) or 0)
+    try:
+        from helper.database import db
+        from helper.plans import get_plan
+        from helper.utils import humanbytes
+        subscription = await db.get_subscription(user_id, bot_id)
+        plan = get_plan(subscription.get("plan", "free"))
+        used = await db.get_usage(user_id, bot_id)
+        plan_name = plan.name
+        used_text = humanbytes(used)
+        remaining_text = humanbytes(max(plan.daily_limit - used, 0))
+    except Exception:
+        plan_name, used_text, remaining_text = "🆓 Free", "0 B", "10 GB"
+
+    try:
+        user = await client.get_users(user_id)
+        first_name = user.first_name or "Owner"
+    except Exception:
+        first_name = "Owner"
+
+    return (
         "🔥 **Welcome to AniToon Bot** 🔥\n\n"
-        "👑 **Owner access detected**\n"
-        "⚡ Unlimited owner access\n\n"
-        "Use the owner controls below.",
+        f"👋 Hello **{first_name}**!\n\n"
+        f"💎 **Plan:** {plan_name}\n"
+        f"📊 **Used today:** `{used_text}`\n"
+        f"📦 **Remaining:** `{remaining_text}`\n\n"
+        "⚡ Fast processing • Clean filenames • Advanced media tools"
+    )
+
+
+async def show_owner_home(client, message):
+    await message.edit_text(
+        await _owner_home_text(client, int(message.from_user.id)),
         reply_markup=owner_keyboard(),
     )
 
@@ -55,10 +83,7 @@ async def owner_start_page(client, message):
         return
     clear_pending(message.from_user.id)
     await message.reply_text(
-        "🔥 **Welcome to AniToon Bot** 🔥\n\n"
-        "👑 **Owner access detected**\n"
-        "⚡ Unlimited owner access\n\n"
-        "Use the owner controls below.",
+        await _owner_home_text(client, int(message.from_user.id)),
         reply_markup=owner_keyboard(),
     )
     raise StopPropagation
@@ -113,5 +138,5 @@ async def owner_home_callback(client, callback_query):
 
     clear_pending(callback_query.from_user.id)
     await callback_query.answer()
-    await show_owner_home(callback_query.message)
+    await show_owner_home(client, callback_query.message)
     raise StopPropagation
