@@ -29,7 +29,7 @@ async def purge_old_rename_activity():
     await ensure_activity_indexes()
     cutoff = datetime.utcnow() - timedelta(days=7)
     try:
-        await db.db.file_activity.delete_many({"completed_at": {"$lt": cutoff}})
+        await db.db.file_activity.delete_many({"$or": [{"completed_at": {"$lt": cutoff}}, {"status": "requested", "created_at": {"$lt": cutoff}}]})
     except Exception:
         pass
 
