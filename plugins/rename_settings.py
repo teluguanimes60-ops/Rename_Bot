@@ -170,22 +170,3 @@ async def rename_template_reply(client, message: Message):
     raise StopPropagation
 
 
-@Client.on_message(
-    filters.private & filters.command(["renamemode"]),
-    group=-2900,
-)
-async def rename_mode_command(client, message):
-    if len(message.command) < 2 or message.command[1].lower() not in MODES:
-        await message.reply_text(
-            "Usage: \`/renamemode manual|auto|permanent\`"
-        )
-        return
-
-    mode = message.command[1].lower()
-    if mode == "permanent" and not await db.get_rename_template(message.from_user.id):
-        await message.reply_text("❌ Set a permanent template first with /renamesettings.")
-        return
-
-    await db.set_rename_mode(message.from_user.id, mode)
-    await message.reply_text(f"✅ Rename mode changed to **{MODES[mode]}**")
-    raise StopPropagation
