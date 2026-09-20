@@ -1,4 +1,6 @@
 from pyrogram import Client, filters
+import os
+import shutil
 from pyrogram.types import Message
 
 from helper.database import db
@@ -15,50 +17,75 @@ async def save_photo(
     client: Client,
     message: Message,
 ):
-    """
-    Saves the user's selected photo as a permanent thumbnail.
-    """
+    """Download the photo, validate it, and make it the active permanent thumbnail."""
+    user_id = int(message.from_user.id)
 
-    user_id = message.from_user.id
-
-    # Make sure the user exists.
     if not await db.is_user_exist(user_id):
         await db.add_user(user_id)
 
     status = await message.reply_text(
-        "🔄 **AniToon: Saving your thumbnail...**"
+        "🔄 **AniToon: Downloading image and saving it as your thumbnail...**"
     )
+
+    work_dir = os.path.join("thumbnails", str(user_id))
+    os.makedirs(work_dir, exist_ok=True)
+    temp_path = os.path.join(work_dir, f"new_{message.id}.jpg")
 
     try:
         old_thumbnail = await db.get_thumbnail(user_id)
 
-        # Setting the new Telegram file_id replaces the previous permanent
-        # thumbnail for this user. No old thumbnail is retained.
-        await db.set_thumbnail(
-            user_id,
-            message.photo.file_id,
+        # Download the image first so the bot validates the actual photo before
+        # making it active. The persistent value remains Telegram's file_id,
+        # so the thumbnail survives application/container restarts.
+        downloaded = await client.download_media(
+            message,
+            file_name=temp_path,
         )
+        downloaded_path = downloaded if isinstance(downloaded, str) else temp_path
+
+        if not os.path.isfile(downloaded_path) or os.path.getsize(downloaded_path) <= 0:
+            raise RuntimeError("The image could not be downloaded correctly.")
+
+        # Replace the previous permanent thumbnail with the new photo.
+        await db.set_thumbnail(user_id, str(message.photo.file_id))
         await db.set_thumbnail_mode(user_id, "custom")
 
         if old_thumbnail:
             result_text = (
-                "✅ **Permanent Thumbnail Replaced Successfully!**\n\n"
-                "The new image is now your active permanent thumbnail."
+                "✅ **Image Saved Successfully for Thumbnail!**
+
+"
+                "Your new image has replaced the previous permanent thumbnail.
+"
+                "It will be used automatically for your files and videos."
             )
         else:
             result_text = (
-                "✅ **Permanent Thumbnail Saved Successfully!**\n\n"
-                "This image is now your active permanent thumbnail."
+                "✅ **Image Saved Successfully for Thumbnail!**
+
+"
+                "This image is now your permanent thumbnail and will be used automatically for your files and videos."
             )
 
         await status.edit_text(result_text)
 
-    except Exception as e:
-        await status.edit_text(
-            "❌ **Failed to save thumbnail.**\n\n"
-            f"`{str(e)[:1000]}`"
-        )
+    except Exception as exc:
+        try:
+            await status.edit_text(
+                "❌ **Failed to save image as thumbnail.**
 
+"
+                f"`{str(exc)[:1000]}`"
+            )
+        except Exception:
+            pass
+    finally:
+        # The permanent thumbnail is stored as a Telegram file_id in MongoDB;
+        # the local downloaded copy is only temporary validation data.
+        try:
+            shutil.rmtree(work_dir, ignore_errors=True)
+        except Exception:
+            pass
 
 # ============================================================
 # VIEW THUMBNAIL
@@ -76,7 +103,7 @@ async def set_thumbnail_command(
 ):
     await message.reply_text(
         "🖼️ **Send me an image now.**\n\n"
-        "I will save it as your custom thumbnail."
+        "The bot will automatically download and save it as your permanent thumbnail for all files and videos."
     )
 
 
