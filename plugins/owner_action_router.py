@@ -51,6 +51,7 @@ def owner_panel_markup() -> InlineKeyboardMarkup:
         ],
         [InlineKeyboardButton("🤖 Bot Details", callback_data="owner:bots")],
         [InlineKeyboardButton("📣 Broadcast", callback_data="owner:broadcast")],
+        [InlineKeyboardButton("🖼 Small Image Stars", callback_data="owner:small_images")],
         [InlineKeyboardButton("🔙 Home", callback_data="start")],
     ])
 
@@ -72,6 +73,24 @@ def stars_markup() -> InlineKeyboardMarkup:
         [InlineKeyboardButton("👑 Ultra", callback_data="owner:star:ultra")],
         [InlineKeyboardButton("🔙 Plans", callback_data="owner:plans")],
     ])
+
+
+def small_images_markup(enabled: bool) -> InlineKeyboardMarkup:
+    label = "🟢 Small Images <20MB: FREE" if enabled else "🔴 Small Images <20MB: STARS"
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton(label, callback_data="owner:small_images:toggle")],
+        [InlineKeyboardButton("🔙 Owner Panel", callback_data="owner:panel")],
+    ])
+
+
+async def small_images_text() -> str:
+    enabled = await db.get_small_images_free()
+    state = "ENABLED — images below 20 MB are free." if enabled else "DISABLED — normal Stars/payment rules apply."
+    return (
+        "🖼 Small Image Stars Setting\n\n"
+        f"Status: {state}\n\n"
+        "This owner-only setting affects images smaller than 20 MB."
+    )
 
 
 def limits_markup() -> InlineKeyboardMarkup:
@@ -278,6 +297,29 @@ async def broadcast_message(source_message, status_message=None) -> tuple[int, i
         await asyncio.sleep(0.05)
 
     return success, failed
+
+
+@Client.on_callback_query(filters.regex(r"^owner:small_images$"), group=-400)
+async def owner_small_images_button(client, cb):
+    if not owner_gate(client, cb.from_user.id):
+        await cb.answer("Owner access only.", show_alert=True)
+        raise StopPropagation
+    clear_pending(cb.from_user.id)
+    await cb.answer()
+    await edit_callback_message(cb, await small_images_text(), reply_markup=small_images_markup(await db.get_small_images_free()))
+    raise StopPropagation
+
+
+@Client.on_callback_query(filters.regex(r"^owner:small_images:toggle$"), group=-400)
+async def owner_small_images_toggle(client, cb):
+    if not owner_gate(client, cb.from_user.id):
+        await cb.answer("Owner access only.", show_alert=True)
+        raise StopPropagation
+    enabled = not await db.get_small_images_free()
+    await db.set_small_images_free(enabled)
+    await cb.answer("Enabled" if enabled else "Disabled")
+    await edit_callback_message(cb, await small_images_text(), reply_markup=small_images_markup(enabled))
+    raise StopPropagation
 
 
 @Client.on_callback_query(filters.regex(r"^owner:stats$"), group=-400)
