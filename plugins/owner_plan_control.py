@@ -16,8 +16,6 @@ def _owner_plans_markup():
         [InlineKeyboardButton('⚡ Pro', callback_data='owner:myplan:pro')],
         [InlineKeyboardButton('💎 Premium', callback_data='owner:myplan:premium')],
         [InlineKeyboardButton('👑 Ultra', callback_data='owner:myplan:ultra')],
-        [InlineKeyboardButton('⭐ Edit Stars', callback_data='owner:stars')],
-        [InlineKeyboardButton('📦 Edit Limits', callback_data='owner:limits')],
         [InlineKeyboardButton('🔙 Owner Panel', callback_data='owner:panel')],
     ])
 
@@ -33,7 +31,7 @@ async def _owner_plans_text(client, user_id: int):
         f'📦 **Daily limit:** `{humanbytes(current.daily_limit)}`\n'
 '
         f'📅 **Duration:** `{duration}`\n\n'
-'Choose Free, Pro, Premium, or Ultra to switch your owner account plan without Stars.'
+        'Choose Free, Pro, Premium, or Ultra to switch your owner account plan without Stars.'
     )
 
 
