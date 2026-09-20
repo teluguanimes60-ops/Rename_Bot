@@ -23,7 +23,7 @@ class Database:
 
     @staticmethod
     def new_user(user_id: int) -> dict:
-        return {"id": int(user_id), "join_date": datetime.utcnow(), "thumb": None, "caption": None, "rename_mode": "manual", "rename_template": "", "thumbnail_mode": "none", "audio_name": DEFAULT_METADATA_NAME, "sub_name": DEFAULT_METADATA_NAME, "audio_prefix": None, "audio_language": None, "audio_suffix": "", "subtitle_prefix": None, "subtitle_language": None, "subtitle_suffix": "", "is_banned": False}
+        return {"id": int(user_id), "join_date": datetime.utcnow(), "thumb": None, "caption": None, "rename_mode": "manual", "rename_template": "", "thumbnail_mode": "none", "language": None, "audio_name": DEFAULT_METADATA_NAME, "sub_name": DEFAULT_METADATA_NAME, "audio_prefix": None, "audio_language": None, "audio_suffix": "", "subtitle_prefix": None, "subtitle_language": None, "subtitle_suffix": "", "is_banned": False}
 
     async def add_user(self, user_id: int):
         await self.col.update_one({"id": int(user_id)}, {"$setOnInsert": self.new_user(user_id)}, upsert=True)
@@ -81,6 +81,18 @@ class Database:
 
     async def clear_force_sub_request(self, user_id: int, chat_id: int):
         await self.force_sub_requests.delete_one({"user_id": int(user_id), "chat_id": int(chat_id)})
+
+    async def set_language(self, user_id: int, language: str | None):
+        from helper.i18n import is_valid_language
+        value = str(language or "").strip().lower()
+        if value and not is_valid_language(value):
+            raise ValueError("Invalid language")
+        await self.col.update_one({"id": int(user_id)}, {"$set": {"language": value or None}}, upsert=True)
+
+    async def get_language(self, user_id: int) -> str | None:
+        user = await self.col.find_one({"id": int(user_id)}, {"language": 1})
+        value = str(user.get("language") or "").strip().lower() if user else ""
+        return value or None
 
     async def set_thumbnail(self, user_id: int, file_id: str | None):
         await self.col.update_one({"id": int(user_id)}, {"$set": {"thumb": file_id}}, upsert=True)
