@@ -133,12 +133,7 @@ async def thumbnail_manage_callback(client: Client, callback_query):
 # VIEW THUMBNAIL
 # ============================================================
 
-@Client.on_message(
-    filters.private
-    & filters.command(
-        ["setthumb", "set_thumb"]
-    )
-)
+
 async def set_thumbnail_command(
     client: Client,
     message: Message,
