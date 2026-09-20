@@ -47,8 +47,11 @@ def thumbnail_menu():
     ])
 
 
-def permanent_thumbnail_menu():
+def permanent_thumbnail_menu(has_thumbnail: bool = True):
+    change_label = "🔄 Replace Thumbnail" if has_thumbnail else "➕ Add Thumbnail"
+    change_callback = "thumb_manage:replace" if has_thumbnail else "thumb_manage:add"
     return InlineKeyboardMarkup([
+        [InlineKeyboardButton(change_label, callback_data=change_callback)],
         [InlineKeyboardButton("👁 View Custom", callback_data="view_thumb")],
         [InlineKeyboardButton("🗑 Delete Custom", callback_data="delete_thumb")],
         [InlineKeyboardButton("🔙 Back", callback_data="settings_thumb")],
