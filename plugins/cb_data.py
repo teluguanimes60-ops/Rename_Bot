@@ -448,16 +448,17 @@ async def cb_thumbnail_mode(
     user_id = int(callback_query.from_user.id)
 
     if mode == "custom":
-        if not await db.get_thumbnail(user_id):
+        has_thumbnail = bool(await db.get_thumbnail(user_id))
+        if not has_thumbnail:
             await callback_query.answer(
-                "Send an image first to save your Permanent Thumbnail.",
+                "Add your first permanent thumbnail by sending an image.",
                 show_alert=True,
             )
             await client.send_message(
                 user_id,
-                "🖼 **Permanent Thumbnail**\n\n"
-                "Send me an image now. It will be saved and used for your processed files and videos until you change the mode.",
-                reply_markup=permanent_thumbnail_menu(),
+                "🖼 **Add Permanent Thumbnail**\n\n"
+                "Send an image now. It will become your permanent thumbnail for all processed files and videos.",
+                reply_markup=permanent_thumbnail_menu(False),
             )
             return
 
@@ -466,11 +467,10 @@ async def cb_thumbnail_mode(
         await edit_callback_message(
             callback_query,
             "🖼 **Permanent Thumbnail**\n\n"
-            "Your saved thumbnail is active for processed files and videos.",
-            reply_markup=permanent_thumbnail_menu(),
+            "Your saved thumbnail is active for all processed files and videos.",
+            reply_markup=permanent_thumbnail_menu(True),
         )
         return
-
     await db.set_thumbnail_mode(user_id, mode)
     await callback_query.answer("Thumbnail mode updated ✅", show_alert=True)
     mode_text = {
