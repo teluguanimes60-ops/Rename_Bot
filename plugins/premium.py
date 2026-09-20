@@ -49,6 +49,22 @@ async def send_plan_menu(client, chat_id, target_bot_id):
         reply_markup=InlineKeyboardMarkup(buttons),
     )
 
+@Client.on_message(filters.private & filters.command("plans"), group=-2500)
+async def plans_command(client, message):
+    user_id = int(message.from_user.id)
+    bot_id = get_bot_id(client)
+    if not await db.is_user_exist(user_id):
+        await db.add_user(user_id)
+    if is_main_bot(client):
+        await send_plan_menu(client, user_id, bot_id)
+        return
+    if not Config.MAIN_BOT_USERNAME:
+        await message.reply_text("❌ **Main payment bot is not configured.**")
+        return
+    url = f"https://t.me/{Config.MAIN_BOT_USERNAME}?start=plans_{bot_id}"
+    keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("⭐ Open Plans", url=url)]])
+    await message.reply_text("💎 **AniToon Plans**\n\nPremium purchases are handled by the main AniToon payment bot.", reply_markup=keyboard)
+
 @Client.on_message(filters.private & filters.command(["plan", "myplan", "status"]))
 async def user_plan_status(client, message):
     user_id = message.from_user.id
