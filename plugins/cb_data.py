@@ -45,36 +45,20 @@ async def cb_language_confirm(client: Client, callback_query):
     await db.add_user(user_id)
     await db.set_language(user_id, code)
     await callback_query.answer(t(code, "language_saved"), show_alert=True)
+    from plugins.start import get_force_sub_status, make_force_sub_text, make_force_sub_keyboard
+    joined_count, missing, failed = await get_force_sub_status(client, user_id)
+    if missing or failed:
+        await edit_callback_message(
+            callback_query,
+            make_force_sub_text(joined_count, len(missing), len(failed)),
+            reply_markup=make_force_sub_keyboard(missing, failed),
+        )
+        return
     await edit_callback_message(
         callback_query,
-        f"{t(code, 'language_saved')}\n\n"
-        f"{language_label(code)}",
-        reply_markup=InlineKeyboardMarkup([
-            [InlineKeyboardButton("🔙 Continue", callback_data="start")]
-        ]),
+        t(code, "language_saved") + "\\n\\n🔥 **Welcome to AniToon Bot** 🔥",
+        reply_markup=main_menu(getattr(client, "is_main_bot", False)),
     )
-
-from pyrogram import Client, filters
-from pyrogram.types import (
-    InlineKeyboardMarkup,
-    InlineKeyboardButton,
-    ForceReply,
-)
-
-from config import Config
-from helper.database import db
-from helper.plans import get_plan
-from helper.utils import humanbytes
-from plugins.ui import (
-    main_menu,
-    settings_menu,
-    help_menu,
-    thumbnail_menu,
-    edit_callback_message,
-    language_keyboard,
-    language_confirm_keyboard,
-)
-
 
 # ============================================================
 # HOME
@@ -91,6 +75,16 @@ async def cb_start(
 
     user_id = callback_query.from_user.id
     bot_id = int(getattr(client, "bot_id", 0))
+
+    from helper.i18n import t
+    language = await db.get_language(user_id)
+    if not language:
+        await edit_callback_message(
+            callback_query,
+            t("en", "select_title") + "\\n\\n" + t("en", "select_prompt"),
+            reply_markup=language_keyboard(),
+        )
+        return
 
     # --------------------------------------------------------
     # FORCE SUBSCRIBE CHECK
