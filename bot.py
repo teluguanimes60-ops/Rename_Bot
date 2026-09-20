@@ -22,23 +22,8 @@ log = logging.getLogger("AniToon")
 BOT_COMMANDS = [
     BotCommand("start", "Open AniToon"),
     BotCommand("help", "Show help"),
-    BotCommand("plan", "View your current plan"),
-    BotCommand("plans", "View premium plans"),
-    BotCommand("myplan", "View your current plan"),
-    BotCommand("status", "View your usage and plan"),
-    BotCommand("queue", "Show your processing queue"),
     BotCommand("cancel", "Cancel current processing"),
-    BotCommand("setcaption", "Set a default caption"),
-    BotCommand("seecaption", "View your caption"),
-    BotCommand("delcaption", "Delete your caption"),
-    BotCommand("metadata", "Open metadata settings"),
-    BotCommand("metasettings", "Open metadata settings"),
-    BotCommand("setthumb", "Set a custom thumbnail"),
-    BotCommand("viewthumb", "View your thumbnail"),
-    BotCommand("delthumb", "Delete your thumbnail"),
-    BotCommand("paysupport", "Payment support"),
     BotCommand("clone", "Create a clone bot"),
-    BotCommand("renamesettings", "Rename mode and permanent text settings"),
 ]
 
 
