@@ -311,7 +311,7 @@ async def rename_output_fix(client, cb):
 
         await jobs.update(
             job.job_id,
-            extra={**job.extra, "name_submitted": True, "auto_name": name},
+            extra={**job.extra, "name_submitted": True, "auto_name": name, "submitted_name": name, "state": "queued"},
         )
         from plugins.rename_reply_responder import process_custom_name_job, run_name_job_serialized
         await run_name_job_serialized(
