@@ -16,7 +16,7 @@ from helper.cancel_manager import register_task, unregister_task
 from helper.database import db
 from helper.ffmpeg import convert_media, fix_metadata, get_video_info, inspect_media_streams, remux_with_track_names, take_screenshot
 from helper.job_state import Job, jobs
-from helper.job_transfer import download_job
+from helper.job_transfer import download_job, send_completion_notice
 from helper.metadata import get_metadata, language_name
 from helper.thumbnail_manager import resolve_thumbnail
 from helper.plans import get_plan
@@ -175,8 +175,7 @@ async def _output_caption(user_id: int, filename: str, size: int, duration: floa
     saved = await db.get_caption(user_id)
     if saved:
         return str(saved).replace("{filename}", filename).replace("{filesize}", humanbytes(size)).replace("{duration}", str(int(duration)))
-    return f"✅ **AniToon Processed**\n\n📂 `{filename}`\n📦 `{humanbytes(size)}`"
-
+    return ""
 
 async def _send_output(client, message: Message, job: Job, path: str, filename: str, status, duration=0, width=0, height=0, thumb=None):
     mime = job.mime_type or ""
@@ -228,6 +227,7 @@ async def _finish_job(client, message: Message, job: Job, output_path: str, outp
             if not job.extra.get("usage_charged"):
                 await db.update_usage(job.user_id, job.bot_id, input_size)
                 await jobs.update(job.job_id, extra={**job.extra, "usage_charged": True})
+            await send_completion_notice(client, job.user_id, parts=len(parts))
             await status.edit_text("✅ **Processing Complete!**\n\n" f"📂 `{output_name}`\n" f"📦 `{humanbytes(os.path.getsize(output_path))}`\n" f"🧩 Parts: `{len(parts)}`")
         except FloodWait as exc:
             await status.edit_text(f"⏳ **FloodWait**\nWaiting `{exc.value}` seconds...")
