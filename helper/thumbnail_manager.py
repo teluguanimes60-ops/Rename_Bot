@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-import os
 import asyncio
+import os
+import shutil
 
 from helper.database import db
 from helper.ffmpeg import take_screenshot
@@ -21,74 +22,171 @@ def _message_thumbnail_file_id(source) -> str | None:
     file_id = getattr(thumbs[0], "file_id", None)
     return str(file_id) if file_id else None
 
-async def _normalize_thumbnail(client, job, source, tag: str):
+
+async def _normalize_thumbnail(client, job, source, tag: str, *, local: bool = False):
+    """Return a Telegram-safe JPEG thumbnail and its temporary path."""
     if not source:
         return None, None
-    raw = os.path.join(job.work_dir, f".thumb_raw_{tag}.jpg")
+
+    os.makedirs(job.work_dir, exist_ok=True)
+    raw = os.path.join(job.work_dir, f".thumb_raw_{tag}")
     final = os.path.join(job.work_dir, f".thumb_{tag}.jpg")
+
     try:
-        os.makedirs(job.work_dir, exist_ok=True)
-        result = await client.download_media(source, file_name=raw)
-        raw_path = result if isinstance(result, str) and os.path.isfile(result) else raw
+        if local:
+            shutil.copy2(source, raw)
+            raw_path = raw
+        else:
+            result = await client.download_media(source, file_name=raw)
+            raw_path = result if isinstance(result, str) and os.path.isfile(result) else raw
+
         if not os.path.isfile(raw_path):
             return None, None
-        for quality in (5, 8, 12, 16, 20, 25):
-            cmd = ["ffmpeg","-y","-i",raw_path,"-vf","scale=320:320:force_original_aspect_ratio=decrease","-frames:v","1","-q:v",str(quality),final]
-            proc = await asyncio.create_subprocess_exec(*cmd, stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL)
-            await proc.communicate()
-            if proc.returncode == 0 and os.path.isfile(final) and os.path.getsize(final) <= 200 * 1024:
-                if raw_path != final:
-                    try: os.remove(raw_path)
-                    except OSError: pass
-                return final, final
-        return (final, final) if os.path.isfile(final) else (None, None)
+
+        # Telegram thumbnails should be JPEG, <= 320x320 and small enough to
+        # be accepted reliably. Reduce dimensions/quality until <= 190 KB.
+        for size in (320, 256, 192, 160):
+            for quality in (8, 14, 20, 26, 31):
+                cmd = [
+                    "ffmpeg", "-y",
+                    "-i", raw_path,
+                    "-vf",
+                    f"scale={size}:{size}:force_original_aspect_ratio=decrease",
+                    "-frames:v", "1",
+                    "-q:v", str(quality),
+                    final,
+                ]
+                proc = await asyncio.create_subprocess_exec(
+                    *cmd,
+                    stdout=asyncio.subprocess.DEVNULL,
+                    stderr=asyncio.subprocess.DEVNULL,
+                )
+                await proc.communicate()
+
+                if (
+                    proc.returncode == 0
+                    and os.path.isfile(final)
+                    and 0 < os.path.getsize(final) <= 190 * 1024
+                ):
+                    if raw_path != final:
+                        try:
+                            os.remove(raw_path)
+                        except OSError:
+                            pass
+                    return final, final
+
+        if raw_path != final:
+            try:
+                os.remove(raw_path)
+            except OSError:
+                pass
+        return None, None
+    except Exception:
+        try:
+            if os.path.isfile(raw):
+                os.remove(raw)
+        except OSError:
+            pass
+        return None, None
+
+
+async def _video_frame_thumbnail(job, media_path: str):
+    """Extract a frame from the actual processed video file."""
+    if not media_path or not os.path.isfile(media_path):
+        return None, None
+
+    try:
+        from helper.ffmpeg import get_video_info
+
+        duration, width, height = await get_video_info(media_path)
+        if width <= 0 or height <= 0:
+            return None, None
+
+        frame = os.path.join(job.work_dir, f".auto_thumb_{job.job_id}.jpg")
+        generated = await take_screenshot(
+            media_path,
+            frame,
+            max(float(duration or 0), 1.0),
+        )
+        if not generated or not os.path.isfile(generated):
+            return None, None
+
+        return generated, generated
     except Exception:
         return None, None
 
-async def resolve_thumbnail(client, job, media_path: str, duration: float = 0):
-    """Return (thumbnail, temporary_path).
 
-    none   -> no thumbnail
-    custom -> saved Telegram photo file_id
-    auto   -> source Telegram thumbnail, otherwise a generated video frame,
-              otherwise a local image file when the output itself is an image
-    """
+async def resolve_thumbnail(client, job, media_path: str, duration: float = 0):
+    """Resolve the user's thumbnail mode for video/document uploads."""
     mode = await db.get_thumbnail_mode(job.user_id)
 
     if mode == "none":
         return None, None
 
     if mode == "custom":
-        return await _normalize_thumbnail(client, job, await db.get_thumbnail(job.user_id), "custom")
+        saved = await db.get_thumbnail(job.user_id)
+        if not saved:
+            return None, None
 
+        normalized, temp = await _normalize_thumbnail(
+            client,
+            job,
+            saved,
+            "custom",
+        )
+        if normalized:
+            return normalized, temp
+
+        # Keep a saved Telegram file_id usable even if normalization temporarily
+        # fails. Both send_video() and send_document() can use this directly.
+        return saved, None
+
+    # Auto Thumbnail: first extract a frame from the actual video being sent.
+    # This means both "Convert into Video" and "Convert into File" receive a
+    # thumbnail taken from that video's own contents.
+    auto_frame, auto_temp = await _video_frame_thumbnail(job, media_path)
+    if auto_frame:
+        normalized, temp = await _normalize_thumbnail(
+            client,
+            job,
+            auto_frame,
+            "auto",
+            local=True,
+        )
+        if normalized:
+            try:
+                if auto_frame != normalized and os.path.isfile(auto_frame):
+                    os.remove(auto_frame)
+            except OSError:
+                pass
+            return normalized, temp
+        return auto_frame, auto_temp
+
+    # Non-video files cannot have a frame extracted. Use Telegram's source
+    # preview thumbnail as the fallback when one exists.
     source = (job.extra or {}).get("source_message")
     source_thumb = _message_thumbnail_file_id(source)
     if source_thumb:
+        normalized, temp = await _normalize_thumbnail(
+            client,
+            job,
+            source_thumb,
+            "source",
+        )
+        if normalized:
+            return normalized, temp
         return source_thumb, None
 
+    # An image file can itself be used as a thumbnail.
     lower = str(media_path or "").lower()
-    image_exts = {".jpg", ".jpeg", ".png", ".webp"}
-    if lower.endswith(tuple(image_exts)) and os.path.isfile(media_path):
-        return media_path, None
-
-    if duration <= 0 and os.path.isfile(media_path):
-        try:
-            from helper.ffmpeg import get_video_info
-            duration, _width, _height = await get_video_info(media_path)
-        except Exception:
-            duration = 0
-
-    if duration > 0 and os.path.isfile(media_path):
-        temp = os.path.join(
-            job.work_dir,
-            f".auto_thumb_{job.job_id}.jpg",
+    if lower.endswith((".jpg", ".jpeg", ".png", ".webp")) and os.path.isfile(media_path):
+        normalized, temp = await _normalize_thumbnail(
+            client,
+            job,
+            media_path,
+            "image",
+            local=True,
         )
-        generated = await take_screenshot(media_path, temp, duration)
-        if generated and os.path.isfile(generated):
-            normalized, temp = await _normalize_thumbnail(client, job, generated, "auto")
-            try:
-                if generated != normalized and os.path.isfile(generated): os.remove(generated)
-            except OSError: pass
-            return normalized, temp
+        return normalized, temp
 
     return None, None
