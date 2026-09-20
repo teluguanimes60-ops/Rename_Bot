@@ -37,10 +37,16 @@ def thumbnail_menu():
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("🚫 No Thumbnail", callback_data="thumb_mode:none")],
         [InlineKeyboardButton("🤖 Auto Thumbnail", callback_data="thumb_mode:auto")],
-        [InlineKeyboardButton("🖼 Custom Permanent", callback_data="thumb_mode:custom")],
+        [InlineKeyboardButton("🖼 Permanent Thumbnail", callback_data="thumb_mode:custom")],
+        [InlineKeyboardButton("🔙 Back", callback_data="settings")],
+    ])
+
+
+def permanent_thumbnail_menu():
+    return InlineKeyboardMarkup([
         [InlineKeyboardButton("👁 View Custom", callback_data="view_thumb")],
         [InlineKeyboardButton("🗑 Delete Custom", callback_data="delete_thumb")],
-        [InlineKeyboardButton("🔙 Back", callback_data="settings")],
+        [InlineKeyboardButton("🔙 Back", callback_data="settings_thumb")],
     ])
 
 
