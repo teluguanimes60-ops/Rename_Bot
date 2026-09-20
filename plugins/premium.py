@@ -15,7 +15,7 @@ from config import Config
 from helper.database import db
 from helper.plans import all_paid_plans, get_plan, PLANS
 from helper.utils import humanbytes
-from plugins.ui import edit_callback_message\nfrom helper.i18n import t
+from plugins.ui import edit_callback_message\nfrom language.strings import tr
 
 
 def is_main_bot(client):
@@ -31,7 +31,7 @@ async def send_plan_menu(client, chat_id, target_bot_id):
     buttons = []
     for plan in all_paid_plans():
         buttons.append([InlineKeyboardButton(f"{plan.name} • {plan.stars} ⭐", callback_data=f"buy:{plan.key}:{int(target_bot_id)}")])
-    buttons.append([InlineKeyboardButton(f"⬅️ {t(lang, 'Back')}", callback_data="start")])
+    buttons.append([InlineKeyboardButton(f"⬅️ {tr(lang, 'Back')}", callback_data="start")])
 
     free = get_plan("free")
     lines = [
