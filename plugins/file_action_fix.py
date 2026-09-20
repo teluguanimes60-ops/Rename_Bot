@@ -132,17 +132,56 @@ async def _deliver_output(client: Client, job: Job, path: str, filename: str, st
     path = await _apply_user_metadata(job, path)
     output_mode = str((job.extra or {}).get("rename_output_mode") or "").lower()
 
-    # "file" means a Telegram document even when the source is an MP4.
-    # "video" means native Telegram video when the resulting file is a video.
-    if output_mode != "file" and (_extension(filename) == "mp4" or (job.mime_type or "") == "video/mp4"):
+    # "file" always means Telegram document.
+    if output_mode == "file":
+        parts = await split_file_for_telegram(path, job.work_dir, filename)
+        if len(parts) > 1:
+            return [
+                await _send_plain_output(
+                    client, job, part, os.path.basename(part), status, force_document=True
+                )
+                for part in parts
+            ]
+        return [await _send_plain_output(client, job, path, filename, status, force_document=True)]
+
+    # "video" means a native Telegram video. If the source container is not
+    # MP4, make an MP4 video first, then send it with send_video(). This is
+    # what makes the result appear as a normal Telegram video message.
+    if output_mode == "video":
+        from helper.ffmpeg import get_video_info, prepare_video_for_telegram
+
+        duration, width, height = await get_video_info(path)
+        if duration <= 0 or width <= 0 or height <= 0:
+            raise RuntimeError("The selected file does not contain a usable video stream")
+
+        if _extension(filename) != "mp4":
+            video_filename = f"{_base_without_extension(filename)}.mp4"
+            prepared_path = os.path.join(job.work_dir, video_filename)
+            ok = await prepare_video_for_telegram(path, prepared_path)
+            if not ok or not os.path.isfile(prepared_path):
+                raise RuntimeError("Could not convert the selected output into MP4 video")
+            path = prepared_path
+            filename = video_filename
+
+        if is_large_video(path):
+            parts = await split_video_for_telegram(path, job.work_dir, filename)
+            return [
+                await _send_video(client, job, part, os.path.basename(part), status)
+                for part in parts
+            ]
+        return [await _send_video(client, job, path, filename, status, prepared_video=True)]
+
+    # Normal/default output follows the actual file type.
+    if _extension(filename) == "mp4" or (job.mime_type or "") == "video/mp4":
         if is_large_video(path):
             parts = await split_video_for_telegram(path, job.work_dir, filename)
             return [await _send_video(client, job, part, os.path.basename(part), status) for part in parts]
         return [await _send_video(client, job, path, filename, status, prepared_video=prepared_video)]
+
     parts = await split_file_for_telegram(path, job.work_dir, filename)
     if len(parts) > 1:
-        return [await _send_plain_output(client, job, part, os.path.basename(part), status, force_document=(output_mode == "file")) for part in parts]
-    return [await _send_plain_output(client, job, path, filename, status, force_document=(output_mode == "file"))]
+        return [await _send_plain_output(client, job, part, os.path.basename(part), status, force_document=False) for part in parts]
+    return [await _send_plain_output(client, job, path, filename, status, force_document=False)]
 
 
 @Client.on_message(filters.private & (filters.document | filters.video | filters.audio), group=-10000)
