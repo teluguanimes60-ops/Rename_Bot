@@ -301,10 +301,11 @@ async def cb_settings(
 ):
     await callback_query.answer()
 
+    from helper.i18n import t
+    lang = await db.get_language(callback_query.from_user.id) or "en"
     await edit_callback_message(
         callback_query,
-        "⚙️ **AniToon Settings**\n\n"
-        "Choose what you want to manage:",
+        t(lang, "settings_title") + "\\n\\n" + t(lang, "settings_choose"),
         reply_markup=settings_menu(),
     )
 
