@@ -26,6 +26,7 @@ class CloneManager:
             BotCommand("start", "Open AniToon"),
             BotCommand("help", "Show help"),
             BotCommand("plan", "View your current plan"),
+            BotCommand("plans", "View premium plans"),
             BotCommand("myplan", "View your current plan"),
             BotCommand("status", "View your usage and plan"),
             BotCommand("queue", "Show your processing queue"),
