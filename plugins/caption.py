@@ -13,18 +13,6 @@ from helper.database import db
 # SET CAPTION
 # ============================================================
 
-@Client.on_message(
-    filters.private
-    & filters.command(
-        [
-            "set_caption",
-            "setcaption",
-        ]
-    )
-)
-async def set_caption(
-    client: Client,
-    message: Message,
 ):
     if len(message.command) < 2:
         return await message.reply_text(
@@ -60,20 +48,6 @@ async def set_caption(
 # VIEW CAPTION
 # ============================================================
 
-@Client.on_message(
-    filters.private
-    & filters.command(
-        [
-            "see_caption",
-            "seecaption",
-            "view_caption",
-            "show_caption",
-        ]
-    )
-)
-async def see_caption(
-    client: Client,
-    message: Message,
 ):
     caption = await db.get_caption(
         message.from_user.id
@@ -111,20 +85,6 @@ async def see_caption(
 # DELETE CAPTION COMMAND
 # ============================================================
 
-@Client.on_message(
-    filters.private
-    & filters.command(
-        [
-            "del_caption",
-            "delcaption",
-            "delete_caption",
-            "deletecaption",
-        ]
-    )
-)
-async def delete_caption(
-    client: Client,
-    message: Message,
 ):
     await db.set_caption(
         message.from_user.id,
