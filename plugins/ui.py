@@ -26,9 +26,10 @@ def main_menu(is_main_bot: bool = True, is_owner: bool = False):
 
 def settings_menu():
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("✏️ Rename Mode", callback_data="rename_settings"), InlineKeyboardButton("📝 Caption", callback_data="settings_caption")],
+        [InlineKeyboardButton("✏️ Rename Mode", callback_data="rename_settings")],
         [InlineKeyboardButton("🖼 Thumbnail", callback_data="settings_thumb")],
         [InlineKeyboardButton("🏷 Metadata", callback_data="metadata_settings"), InlineKeyboardButton("💎 Plan", callback_data="upgrade")],
+        [InlineKeyboardButton("🌐 Language", callback_data="language_settings")],
         [InlineKeyboardButton("🔙 Back", callback_data="start")],
     ])
 
@@ -100,3 +101,23 @@ async def edit_callback_message(callback_query, text, reply_markup=None):
     try: return await message.edit_caption(caption=text, reply_markup=reply_markup)
     except Exception: pass
     return await message.reply_text(text, reply_markup=reply_markup)
+
+
+def language_keyboard():
+    from helper.i18n import LANGUAGES
+    rows = []
+    for i in range(0, len(LANGUAGES), 2):
+        pair = LANGUAGES[i:i + 2]
+        rows.append([
+            InlineKeyboardButton(f"{code_info[2]} {code_info[1]}", callback_data=f"lang:select:{code_info[0]}")
+            for code_info in pair
+        ])
+    return InlineKeyboardMarkup(rows)
+
+
+def language_confirm_keyboard(code: str):
+    from helper.i18n import language_label, t
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton(t(code, "confirm"), callback_data=f"lang:confirm:{code}")],
+        [InlineKeyboardButton(t(code, "back"), callback_data="language_settings")],
+    ])
