@@ -23,6 +23,41 @@ from plugins.ui import file_action_menu, rename_output_menu
 VIDEO_EXTENSIONS = {"mp4", "mkv", "webm", "mov", "avi", "flv", "ts", "m4v"}
 
 
+def _display_file_type(filename: str, media, mime_type: str) -> str:
+    """Show the real file format from the uploaded filename/media, not a stale MIME value."""
+    ext = _extension(filename)
+    video_formats = {"mp4", "mkv", "webm", "mov", "avi", "flv", "ts", "m4v", "3gp", "mpeg", "mpg", "wmv"}
+    audio_formats = {"mp3", "m4a", "aac", "flac", "ogg", "wav", "opus", "amr", "wma"}
+    document_formats = {
+        "pdf", "txt", "rtf", "doc", "docx", "xls", "xlsx", "csv", "ppt", "pptx",
+        "zip", "rar", "7z", "tar", "gz", "json", "xml", "apk", "epub", "mobi",
+    }
+
+    if ext in video_formats:
+        return f"Video · {ext.upper()}"
+    if ext in audio_formats:
+        return f"Audio · {ext.upper()}"
+    if ext in document_formats:
+        return f"Document · {ext.upper()}"
+
+    # Some Telegram uploads have no useful extension. Fall back to the actual
+    # media field first, then the MIME value supplied for this message only.
+    if getattr(media, "video", None) is not None:
+        return "Video"
+    if getattr(media, "audio", None) is not None:
+        return "Audio"
+    mime = str(mime_type or "").strip()
+    if mime.startswith("video/"):
+        return f"Video · {mime.split('/', 1)[1].upper()}"
+    if mime.startswith("audio/"):
+        return f"Audio · {mime.split('/', 1)[1].upper()}"
+    if mime.startswith("image/"):
+        return f"Image · {mime.split('/', 1)[1].upper()}"
+    if mime:
+        return f"Document · {mime.split('/', 1)[-1].upper()}"
+    return "Unknown"
+
+
 async def _show_upload_start(status: Message | None, filename: str):
     if status is None:
         return
@@ -162,7 +197,7 @@ async def repaired_file_download(client: Client, message: Message):
         queue_position = len(all_jobs)
         queue_text = f"\n\n📋 **Queue position:** `#{queue_position}`" if queue_position > 1 else ""
         runtime_text = f"\n🎬 **Runtime:** `{duration // 60}m {duration % 60}s`" if duration else ""
-        status = await message.reply_text("📂 **File Information**\n\n" f"📄 **Name:** `{original_name}`\n" f"📦 **Size:** `{humanbytes(expected_size)}`\n" f"🎞 **Type:** `{mime_type or extension or 'unknown'}`" + runtime_text + queue_text + "\n\nChoose an operation:", reply_markup=file_action_menu(job_id))
+        file_type = _display_file_type(original_name, media, mime_type)\n        status = await message.reply_text("📂 **File Information**\n\n" f"📄 **Name:** `{original_name}`\n" f"📦 **Size:** `{humanbytes(expected_size)}`\n" f"🎞 **Type:** `{file_type}`" + runtime_text + queue_text + "\n\nChoose an operation:", reply_markup=file_action_menu(job_id))
         await jobs.update(job_id, extra={**job.extra, "status_message_id": status.id})
     except Exception:
         shutil.rmtree(work_dir, ignore_errors=True)
