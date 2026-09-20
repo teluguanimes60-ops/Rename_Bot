@@ -57,13 +57,10 @@ def owner_panel_markup() -> InlineKeyboardMarkup:
 
 def plans_markup() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
-        [
-            InlineKeyboardButton("⚡ Pro", callback_data="owner:plan:pro"),
-            InlineKeyboardButton("💎 Premium", callback_data="owner:plan:premium"),
-            InlineKeyboardButton("👑 Ultra", callback_data="owner:plan:ultra"),
-        ],
-        [InlineKeyboardButton("⭐ Edit Stars", callback_data="owner:stars")],
-        [InlineKeyboardButton("📦 Edit Limits", callback_data="owner:limits")],
+        [InlineKeyboardButton("🆓 Free", callback_data="owner:myplan:free")],
+        [InlineKeyboardButton("⚡ Pro", callback_data="owner:myplan:pro")],
+        [InlineKeyboardButton("💎 Premium", callback_data="owner:myplan:premium")],
+        [InlineKeyboardButton("👑 Ultra", callback_data="owner:myplan:ultra")],
         [InlineKeyboardButton("🔙 Owner Panel", callback_data="owner:panel")],
     ])
 
