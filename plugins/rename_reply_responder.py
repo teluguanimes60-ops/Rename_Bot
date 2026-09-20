@@ -38,7 +38,8 @@ async def _find_name_job(user_id: int, message=None):
 async def _download_source(client, message, job, status):
     source = (job.extra or {}).get("source_message") or (job.extra or {}).get("file_id")
     if not source:
-        source = await client.get_messages(message.chat.id, job.source_message_id)
+        chat_id = getattr(getattr(message, "chat", None), "id", None) or int(job.user_id)
+        source = await client.get_messages(chat_id, job.source_message_id)
     if not source:
         raise RuntimeError("Original file could not be located")
     return await download_job(client, source, job, status)
@@ -83,7 +84,13 @@ async def _delete_message_safely(client, chat_id, message_id):
 
 
 async def _new_transfer_status(client, message, job, expected_size):
-    status = await message.reply_text(_initial_download_text(expected_size), reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⏸️ Pause", callback_data=f"transfer:pause:{job.job_id}"), InlineKeyboardButton("❌ Cancel", callback_data=f"transfer:cancel:{job.job_id}")]]))
+    text = _initial_download_text(expected_size)
+    markup = InlineKeyboardMarkup([[InlineKeyboardButton("⏸️ Pause", callback_data=f"transfer:pause:{job.job_id}"), InlineKeyboardButton("❌ Cancel", callback_data=f"transfer:cancel:{job.job_id}")]])
+    chat = getattr(message, "chat", None)
+    if chat is not None and getattr(chat, "id", None):
+        status = await message.reply_text(text, reply_markup=markup)
+    else:
+        status = await client.send_message(job.user_id, text, reply_markup=markup)
     await protect_transfer_message(status)
     reset_progress(job.job_id)
     return status
@@ -107,8 +114,10 @@ async def _convert_with_progress(job, status, output_path, output_format, label)
 
 async def _finish_delivery(client, message, job, status):
     await protect_result(status)
-    await _delete_message_safely(client, message.chat.id, (job.extra or {}).get("rename_prompt_message_id"))
-    await _delete_message_safely(client, status.chat.id, status.id)
+    chat_id = getattr(getattr(message, "chat", None), "id", None) or int(job.user_id)
+    await _delete_message_safely(client, chat_id, (job.extra or {}).get("rename_prompt_message_id"))
+    status_chat_id = getattr(getattr(status, "chat", None), "id", None) or int(job.user_id)
+    await _delete_message_safely(client, status_chat_id, status.id)
 
 
 
