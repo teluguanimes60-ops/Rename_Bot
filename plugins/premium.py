@@ -31,13 +31,13 @@ async def send_plan_menu(client, chat_id, target_bot_id):
     buttons = []
     for plan in all_paid_plans():
         buttons.append([InlineKeyboardButton(f"{plan.name} • {plan.stars} ⭐", callback_data=f"buy:{plan.key}:{int(target_bot_id)}")])
-    buttons.append([InlineKeyboardButton(f"⬅️ {t(lang, "Back")}", callback_data="start")])
+    buttons.append([InlineKeyboardButton(f"⬅️ {t(lang, 'Back')}", callback_data="start")])
 
     free = get_plan("free")
     lines = [
-        f"💎 **AniToon {t(lang, "Plan")}**",
+        f"💎 **AniToon {t(lang, 'Plan')}**",
         "",
-        f"{t(lang, "Choose a plan")} — 30 days:",
+        f"{t(lang, 'Choose a plan')} — 30 days:",
         "",
         f"🆓 **Free** — 0 ⭐ — {free.daily_limit / (1024**3):g} GB/day",
     ]
