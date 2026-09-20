@@ -52,18 +52,13 @@ async def save_photo(
 
         if old_thumbnail:
             result_text = (
-                "✅ **Image Saved Successfully for Thumbnail!**
-
-"
-                "Your new image has replaced the previous permanent thumbnail.
-"
+                "✅ **Image Saved Successfully for Thumbnail!**\n\n"
+                "Your new image has replaced the previous permanent thumbnail.\n"
                 "It will be used automatically for your files and videos."
             )
         else:
             result_text = (
-                "✅ **Image Saved Successfully for Thumbnail!**
-
-"
+                "✅ **Image Saved Successfully for Thumbnail!**\n\n"
                 "This image is now your permanent thumbnail and will be used automatically for your files and videos."
             )
 
@@ -72,9 +67,7 @@ async def save_photo(
     except Exception as exc:
         try:
             await status.edit_text(
-                "❌ **Failed to save image as thumbnail.**
-
-"
+                "❌ **Failed to save image as thumbnail.**\n\n"
                 f"`{str(exc)[:1000]}`"
             )
         except Exception:
