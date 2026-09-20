@@ -44,7 +44,7 @@ async def resolve_thumbnail(client, job, media_path: str, duration: float = 0):
 
     lower = str(media_path or "").lower()
     image_exts = {".jpg", ".jpeg", ".png", ".webp"}
-    if lower.endswith(image_exts) and os.path.isfile(media_path):
+    if lower.endswith(tuple(image_exts)) and os.path.isfile(media_path):
         return media_path, None
 
     if duration <= 0 and os.path.isfile(media_path):
