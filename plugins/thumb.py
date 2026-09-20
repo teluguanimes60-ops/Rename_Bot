@@ -14,33 +14,45 @@ from helper.database import db
     filters.private & filters.photo
 )
 async def save_photo(client: Client, message: Message):
-    """Ask whether a received image should be added/replaced as the permanent thumbnail."""
-    user_id = int(message.from_user.id)
+    """Save every received image immediately as the permanent thumbnail."""
+    user = message.from_user
+    if not user:
+        return
+
+    user_id = int(user.id)
     if not await db.is_user_exist(user_id):
         await db.add_user(user_id)
 
-    has_thumbnail = bool(await db.get_thumbnail(user_id))
-    action = "replace" if has_thumbnail else "add"
-    prompt = (
-        "🖼 **Image Received**\\n\\n"
-        + (
-            "Do you want to replace your current permanent thumbnail with this image?"
-            if has_thumbnail
-            else "Do you want to add this image as your permanent thumbnail?"
+    photo = getattr(message, "photo", None)
+    file_id = getattr(photo, "file_id", None)
+    if not file_id:
+        try:
+            await message.delete()
+        except Exception:
+            pass
+        return
+
+    try:
+        await db.set_thumbnail(user_id, str(file_id))
+        await db.set_thumbnail_mode(user_id, "custom")
+
+        # Delete the original image immediately after it has been saved.
+        try:
+            await message.delete()
+        except Exception:
+            pass
+
+        await client.send_message(
+            user_id,
+            "✅ **Thumbnail Added Successfully!**\\n\\n"
+            "This image is now your permanent thumbnail for all processed files and videos."
         )
-    )
-    await message.reply_text(
-        prompt,
-        reply_markup=InlineKeyboardMarkup([
-            [
-                InlineKeyboardButton(
-                    "🔄 Replace Thumbnail" if has_thumbnail else "➕ Add Thumbnail",
-                    callback_data=f"thumb_choice:{action}:{message.id}",
-                ),
-                InlineKeyboardButton("🚫 No Thumbnail", callback_data=f"thumb_choice:no:{message.id}"),
-            ]
-        ]),
-    )
+    except Exception as exc:
+        await client.send_message(
+            user_id,
+            "❌ **Failed to save thumbnail.**\\n\\n"
+            f"`{str(exc)[:1000]}`"
+        )
 
 
 @Client.on_callback_query(filters.regex(r"^thumb_choice:(add|replace|no):(\\d+)$"))
