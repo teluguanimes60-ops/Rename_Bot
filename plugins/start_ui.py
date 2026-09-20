@@ -41,6 +41,18 @@ async def clean_start(client, message):
         await message.reply_text("⚠️ **Channel verification failed.** Please try `/start` again.")
         raise StopPropagation
 
+    # A clone's Upgrade button opens the main payment bot with
+    # ?start=plans_<clone_bot_id>. Show that plan menu directly.
+    if getattr(client, "is_main_bot", False) and len(getattr(message, "command", [])) > 1:
+        payload = str(message.command[1] or "")
+        if payload.startswith("plans_"):
+            try:
+                target_bot_id = int(payload.split("_", 1)[1])
+            except (TypeError, ValueError):
+                target_bot_id = int(getattr(client, "bot_id", 0) or 0)
+            from plugins.premium import send_plan_menu
+            await send_plan_menu(client, user_id, target_bot_id)
+            raise StopPropagation
     plan_name, used, remaining = "🆓 Free", 0, 10 * 1024 * 1024 * 1024
     try:
         subscription = await db.get_subscription(user_id, bot_id)
