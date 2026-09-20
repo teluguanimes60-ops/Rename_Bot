@@ -15,7 +15,8 @@ from config import Config
 from helper.database import db
 from helper.plans import all_paid_plans, get_plan, PLANS
 from helper.utils import humanbytes
-from plugins.ui import edit_callback_message\nfrom language.strings import tr
+from plugins.ui import edit_callback_message
+from language.strings import tr
 
 
 def is_main_bot(client):
@@ -35,9 +36,9 @@ async def send_plan_menu(client, chat_id, target_bot_id):
 
     free = get_plan("free")
     lines = [
-        f"💎 **AniToon {t(lang, 'Plan')}**",
+        f"💎 **AniToon {tr(lang, 'Plan')}**",
         "",
-        f"{t(lang, 'Choose a plan')} — 30 days:",
+        f"{tr(lang, 'Choose a plan')} — 30 days:",
         "",
         f"🆓 **Free** — 0 ⭐ — {free.daily_limit / (1024**3):g} GB/day",
     ]
