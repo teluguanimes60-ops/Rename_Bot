@@ -206,13 +206,37 @@ async def prepare_video_for_telegram(input_file: str, output_file: str, progress
         cmd = ["ffmpeg", "-y", "-i", input_file, "-map", "0:v:0", "-map", "0:a?", "-c", "copy", "-movflags", "+faststart", "-sn", output_file]
         if await _run_ffmpeg(cmd, progress_callback, duration) and os.path.isfile(output_file): return output_file
         return None
-    if video_codec == "h264" and audio_codec in {None, "", "aac"}:
-        cmd = ["ffmpeg", "-y", "-i", input_file, "-map", "0:v:0", "-map", "0:a?", "-c", "copy", "-movflags", "+faststart", "-sn", output_file]
-        if await _run_ffmpeg(cmd, progress_callback, duration) and os.path.isfile(output_file): return output_file
+    # Prefer a lossless MP4 remux for every source codec first. This keeps
+    # the original video/audio bitrates (and therefore essentially the same
+    # file size) and is dramatically faster than re-encoding. A remux is
+    # enough to change MKV/MOV/etc. into an MP4 container.
+    copy_cmd = [
+        "ffmpeg", "-y", "-i", input_file,
+        "-map", "0:v:0", "-map", "0:a?",
+        "-c", "copy", "-movflags", "+faststart", "-sn", output_file,
+    ]
+    if await _run_ffmpeg(copy_cmd, progress_callback, duration) and os.path.isfile(output_file):
+        return output_file
+
+    # Some source streams are not accepted by the MP4 muxer. Only in that
+    # case fall back to a real encode.
     if video_codec == "h264":
-        cmd = ["ffmpeg", "-y", "-i", input_file, "-map", "0:v:0", "-map", "0:a?", "-c:v", "copy", "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart", "-sn", output_file]
-        if await _run_ffmpeg(cmd, progress_callback, duration) and os.path.isfile(output_file): return output_file
-    cmd = ["ffmpeg", "-y", "-i", input_file, "-map", "0:v:0?", "-map", "0:a?", "-c:v", "libx264", "-preset", Config.FFMPEG_PRESET, "-crf", "23", "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart", "-pix_fmt", "yuv420p", "-sn"]
+        cmd = [
+            "ffmpeg", "-y", "-i", input_file,
+            "-map", "0:v:0", "-map", "0:a?",
+            "-c:v", "copy", "-c:a", "aac", "-b:a", "192k",
+            "-movflags", "+faststart", "-sn", output_file,
+        ]
+        if await _run_ffmpeg(cmd, progress_callback, duration) and os.path.isfile(output_file):
+            return output_file
+
+    cmd = [
+        "ffmpeg", "-y", "-i", input_file,
+        "-map", "0:v:0?", "-map", "0:a?",
+        "-c:v", "libx264", "-preset", Config.FFMPEG_PRESET, "-crf", "23",
+        "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart",
+        "-pix_fmt", "yuv420p", "-sn",
+    ]
     if Config.FFMPEG_THREADS: cmd += ["-threads", str(Config.FFMPEG_THREADS)]
     cmd += ["-progress", "pipe:1", "-nostats", output_file]
     if await _run_ffmpeg(cmd, progress_callback, duration) and os.path.isfile(output_file): return output_file
