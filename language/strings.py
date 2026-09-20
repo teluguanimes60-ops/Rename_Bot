@@ -122,51 +122,51 @@ def tr(lang: str | None, key: str) -> str:
 
 
 def localize_markup(markup, lang: str | None):
-    """Return a copy of an inline keyboard with all known UI labels localized."""
+    """Return a localized copy of an inline keyboard without changing callbacks or URLs."""
     if markup is None:
         return None
     from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+
+    def label(text: str) -> str:
+        text = text or ""
+        mappings = [
+            ("🖼 Permanent Thumbnail", "🖼 " + tr(lang, "Custom Thumbnail")),
+            ("🖼 Custom Thumbnail", "🖼 " + tr(lang, "Custom Thumbnail")),
+            ("➕ Add Thumbnail", "➕ " + tr(lang, "Add Thumbnail")),
+            ("🔄 Replace Thumbnail", "🔄 " + tr(lang, "Replace Thumbnail")),
+            ("👁 Show Thumbnail", "👁 " + tr(lang, "Show Thumbnail")),
+            ("🗑 Delete Custom", "🗑 " + tr(lang, "Delete Custom")),
+            ("💎 Plan", "💎 " + tr(lang, "Plan")),
+            ("🔙 Back", "🔙 " + tr(lang, "Back")),
+            ("🔙 Settings", "🔙 " + tr(lang, "Settings")),
+            ("🛠 Help", "🛠 " + tr(lang, "Help")),
+            ("⚙️ Settings", "⚙️ " + tr(lang, "Settings")),
+            ("✏️ Rename", "✏️ " + tr(lang, "Rename")),
+            ("❌ Cancel", "❌ " + tr(lang, "Cancel")),
+            ("✅ Confirm", "✅ " + tr(lang, "Confirm")),
+            ("🚫 No Thumbnail", "🚫 " + tr(lang, "No Thumbnail")),
+            ("🤖 Auto Thumbnail", "🤖 " + tr(lang, "Auto Thumbnail")),
+            ("🌐 Language", "🌐 " + tr(lang, "Language")),
+            ("🏷 Metadata", "🏷 " + tr(lang, "Metadata")),
+        ]
+        for source, translated in mappings:
+            if text.startswith(source):
+                return translated + text[len(source):]
+        return text
+
     rows = []
     for row in getattr(markup, "inline_keyboard", []) or []:
         new_row = []
         for button in row:
-            text = getattr(button, "text", "") or ""
-            clean = text
-            if clean.startswith("🖼 Permanent Thumbnail") or clean.startswith("🖼 Custom Thumbnail"):
-                localized = tr(lang, "Custom Thumbnail")
-                clean = "🖼 " + localized
-            elif clean.startswith("➕ Add Thumbnail"):
-                clean = "➕ " + tr(lang, "Add Thumbnail")
-            elif clean.startswith("🔄 Replace Thumbnail"):
-                clean = "🔄 " + tr(lang, "Replace Thumbnail")
-            elif clean.startswith("👁 Show Thumbnail"):
-                clean = "👁 " + tr(lang, "Show Thumbnail")
-            elif clean.startswith("🗑 Delete Custom"):
-                clean = "🗑 " + tr(lang, "Delete Custom")
-            elif clean.startswith("💎 Plan"):
-                clean = "💎 " + tr(lang, "Plan")
-            elif clean.startswith("🔙 Back"):
-                clean = "🔙 " + tr(lang, "Back")
-            elif clean.startswith("🔙 Settings"):
-                clean = "🔙 " + tr(lang, "Settings")
-            elif clean.startswith("🛠 Help"):
-                clean = "🛠 " + tr(lang, "Help")
-            elif clean.startswith("⚙️ Settings"):
-                clean = "⚙️ " + tr(lang, "Settings")
-            elif clean.startswith("✏️ Rename"):
-                clean = "✏️ " + tr(lang, "Rename")
-            elif clean.startswith("❌ Cancel"):
-                clean = "❌ " + tr(lang, "Cancel")
-            elif clean.startswith("✅ Confirm"):
-                clean = "✅ " + tr(lang, "Confirm")
-            elif clean.startswith("🚫 No Thumbnail"):
-                clean = "🚫 " + tr(lang, "No Thumbnail")
-            elif clean.startswith("🤖 Auto Thumbnail"):
-                clean = "🤖 " + tr(lang, "Auto Thumbnail")
-            elif clean.startswith("🌐 Language"):
-                clean = "🌐 " + tr(lang, "Language")
-            elif clean.startswith("🏷 Metadata"):
-                clean = "🏷 " + tr(lang, "Metadata")
-            new_row.append(InlineKeyboardButton(clean, callback_data=getattr(button,"callback_data",None), url=getattr(button,"url",None), web_app=getattr(button,"web_app",None), login_url=getattr(button,"login_url",None), switch_inline_query=getattr(button,"switch_inline_query",None), switch_inline_query_current_chat=getattr(button,"switch_inline_query_current_chat",None), callback_game=getattr(button,"callback_game",None), pay=getattr(button,"pay",False)))
+            kwargs = {"text": label(getattr(button, "text", "") or "")}
+            callback_data = getattr(button, "callback_data", None)
+            url = getattr(button, "url", None)
+            if callback_data is not None:
+                kwargs["callback_data"] = callback_data
+            elif url is not None:
+                kwargs["url"] = url
+            else:
+                continue
+            new_row.append(InlineKeyboardButton(**kwargs))
         rows.append(new_row)
     return InlineKeyboardMarkup(rows)
