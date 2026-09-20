@@ -1,3 +1,59 @@
+
+
+# ============================================================
+# LANGUAGE SETTINGS
+# ============================================================
+
+@Client.on_callback_query(filters.regex(r"^language_settings$"), group=-3000)
+async def cb_language_settings(client: Client, callback_query):
+    await callback_query.answer()
+    from helper.i18n import t
+    user_id = int(callback_query.from_user.id)
+    lang = await db.get_language(user_id) or "en"
+    await edit_callback_message(
+        callback_query,
+        f"{t(lang, 'select_title')}\n\n{t(lang, 'select_prompt')}",
+        reply_markup=language_keyboard(),
+    )
+
+
+@Client.on_callback_query(filters.regex(r"^lang:select:([a-z]{2,3})$"), group=-3000)
+async def cb_language_select(client: Client, callback_query):
+    from helper.i18n import is_valid_language, language_label, t
+    code = callback_query.matches[0].group(1)
+    if not is_valid_language(code):
+        await callback_query.answer("Invalid language.", show_alert=True)
+        return
+    await callback_query.answer()
+    await edit_callback_message(
+        callback_query,
+        f"{t(code, 'select_title')}\n\n"
+        f"{language_label(code)}\n\n"
+        f"{t(code, 'select_prompt')}",
+        reply_markup=language_confirm_keyboard(code),
+    )
+
+
+@Client.on_callback_query(filters.regex(r"^lang:confirm:([a-z]{2,3})$"), group=-3000)
+async def cb_language_confirm(client: Client, callback_query):
+    from helper.i18n import is_valid_language, language_label, t
+    code = callback_query.matches[0].group(1)
+    if not is_valid_language(code):
+        await callback_query.answer("Invalid language.", show_alert=True)
+        return
+    user_id = int(callback_query.from_user.id)
+    await db.add_user(user_id)
+    await db.set_language(user_id, code)
+    await callback_query.answer(t(code, "language_saved"), show_alert=True)
+    await edit_callback_message(
+        callback_query,
+        f"{t(code, 'language_saved')}\n\n"
+        f"{language_label(code)}",
+        reply_markup=InlineKeyboardMarkup([
+            [InlineKeyboardButton("🔙 Continue", callback_data="start")]
+        ]),
+    )
+
 from pyrogram import Client, filters
 from pyrogram.types import (
     InlineKeyboardMarkup,
@@ -15,6 +71,8 @@ from plugins.ui import (
     help_menu,
     thumbnail_menu,
     edit_callback_message,
+    language_keyboard,
+    language_confirm_keyboard,
 )
 
 
