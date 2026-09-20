@@ -24,33 +24,33 @@ def _show(value: str) -> str:
 def _text(settings: MetadataSettings) -> str:
     return (
         "🏷 **Metadata Settings**\n\n"
-        "The bot keeps the language name visible for every audio/subtitle track and adds your prefix and suffix around it.\n\n"
-        f"🎵 **Audio:** `{settings.audio_name}`\n"
-        f"📜 **Subtitle:** `{settings.subtitle_name}`\n\n"
-        "Default prefix: `@anitoon_edit`\n"
-        "Audio fallback language: `Japanese`\n"
-        "Subtitle fallback language: `English`\n\n"
-        "Choose a track to change only its Prefix or Suffix."
+        "🎵 **Audio tracks:** Language is detected from each track automatically.\n"
+        f"Prefix: `{_show(settings.audio_prefix)}`  •  Suffix: `{_show(settings.audio_suffix)}`\n\n"
+        "📜 **Subtitle tracks:** Language is detected from each track automatically.\n"
+        f"Prefix: `{_show(settings.subtitle_prefix)}`  •  Suffix: `{_show(settings.subtitle_suffix)}`\n\n"
+        "The language name is kept visible in the final audio/subtitle track title.\n"
+        "Example: `@anitoon_edit English` or `@anitoon_edit Japanese Dub`.\n\n"
+        "Choose **Set Audio** or **Set Subtitle** to change only the Prefix or Suffix."
     )
-
 
 def _section_text(kind: str, settings: MetadataSettings) -> str:
     if kind == "audio":
-        prefix, language, suffix = settings.audio_prefix, settings.audio_language, settings.audio_suffix
-        title = "🎵 Audio Metadata"
+        prefix, suffix = settings.audio_prefix, settings.audio_suffix
+        title = "🎵 **Audio Metadata**"
+        example = _show(settings.audio_name)
     else:
-        prefix, language, suffix = settings.subtitle_prefix, settings.subtitle_language, settings.subtitle_suffix
-        title = "📜 Subtitle Metadata"
-    final_name = " ".join(x for x in (prefix, language, suffix) if x).strip()
+        prefix, suffix = settings.subtitle_prefix, settings.subtitle_suffix
+        title = "📜 **Subtitle Metadata**"
+        example = _show(settings.subtitle_name)
     return (
         f"{title}\n\n"
+        "Language: **Auto-detected per track**\n"
         f"Prefix: `{_show(prefix)}`\n"
-        f"Language: `{_show(language)}`\n"
         f"Suffix: `{_show(suffix)}`\n\n"
-        f"Final track name: `{final_name}`\n\n"
-        "Changing/removing prefix or suffix never removes the language."
+        f"Example final title: `{example}`\n\n"
+        "Your prefix/suffix are applied around the real language name in every matching track.\n"
+        "Send `-` to remove a prefix or suffix."
     )
-
 
 def _section_keyboard(kind: str) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
