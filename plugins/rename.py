@@ -468,7 +468,6 @@ async def process_rename(client, message):
             await message.reply_text(f"❌ Use this format: `1 | Track Name`\n\n`{str(exc)[:500]}`")
 
 
-@Client.on_message(filters.private & filters.command("advanced"))
 async def advanced_command(client, message):
     job = await jobs.get_user_job(message.from_user.id)
     if not job:
