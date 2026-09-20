@@ -162,7 +162,7 @@ async def process_custom_name_job(client, message, job, name: str):
         )
         await db.update_usage(job.user_id, job.bot_id, size)
         await mark_rename_completed(job.job_id)
-        await send_completion_notice(client, job.user_id, parts=len(results))
+        await send_completion_notice(client, job.user_id, results=results, parts=len(results))
         await _finish_delivery(client, message, job, status)
         return results
     except AniToonTransferCancelled:
