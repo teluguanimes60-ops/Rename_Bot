@@ -15,7 +15,7 @@ from config import Config
 from helper.database import db
 from helper.plans import all_paid_plans, get_plan, PLANS
 from helper.utils import humanbytes
-from plugins.ui import edit_callback_message
+from plugins.ui import edit_callback_message\nfrom helper.i18n import t
 
 
 def is_main_bot(client):
@@ -27,16 +27,17 @@ def get_bot_id(client):
 
 
 async def send_plan_menu(client, chat_id, target_bot_id):
+    lang = await db.get_language(int(chat_id)) or "en"
     buttons = []
     for plan in all_paid_plans():
         buttons.append([InlineKeyboardButton(f"{plan.name} • {plan.stars} ⭐", callback_data=f"buy:{plan.key}:{int(target_bot_id)}")])
-    buttons.append([InlineKeyboardButton("⬅️ Back", callback_data="start")])
+    buttons.append([InlineKeyboardButton(f"⬅️ {t(lang, "Back")}", callback_data="start")])
 
     free = get_plan("free")
     lines = [
-        "💎 **AniToon Premium Plans**",
+        f"💎 **AniToon {t(lang, "Plan")}**",
         "",
-        "Choose a plan for 30 days:",
+        f"{t(lang, "Choose a plan")} — 30 days:",
         "",
         f"🆓 **Free** — 0 ⭐ — {free.daily_limit / (1024**3):g} GB/day",
     ]
