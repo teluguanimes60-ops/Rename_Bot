@@ -5,7 +5,7 @@ from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from helper.database import db
 from helper.i18n import t
-from plugins.ui import language_keyboard, thumbnail_menu, permanent_thumbnail_menu
+from plugins.ui import language_keyboard, thumbnail_menu, permanent_thumbnail_menu\nfrom language.strings import localize_markup
 
 
 async def _language(user_id: int) -> str:
@@ -51,13 +51,13 @@ async def command_thumbnail(client, message):
     has_thumbnail = bool(await db.get_thumbnail(user_id))
     await message.reply_text(
         f"🖼 **{t(lang, 'Thumbnail Page')}**\n\nChoose your thumbnail mode.",
-        reply_markup=thumbnail_menu(),
+        reply_markup=localize_markup(thumbnail_menu(), lang),
     )
     if has_thumbnail:
         await message.reply_text(
             f"🖼 **{t(lang, 'Custom Thumbnail')}**\n\n"
             "Your saved thumbnail is available below.",
-            reply_markup=permanent_thumbnail_menu(True),
+            reply_markup=localize_markup(permanent_thumbnail_menu(True), lang),
         )
 
 
