@@ -218,16 +218,17 @@ async def _finish_job(client, message: Message, job: Job, output_path: str, outp
             if os.path.getsize(output_path) > 2_000_000_000:
                 await status.edit_text("✂️ **Large file detected. Splitting into parts...**")
                 parts = await split_file(output_path, 2_000_000_000)
+            sent_results = []
             for index, part in enumerate(parts, 1):
                 name = os.path.basename(part)
                 if len(parts) > 1:
                     stem, ext = os.path.splitext(output_name)
                     name = f"{stem}.part{index:03d}{ext or ''}"
-                await _send_output(client, message, job, part, name, status, duration if index == 1 else 0, width if index == 1 else 0, height if index == 1 else 0, thumb if index == 1 else None)
+                sent_results.append(await _send_output(client, message, job, part, name, status, duration if index == 1 else 0, width if index == 1 else 0, height if index == 1 else 0, thumb if index == 1 else None))
             if not job.extra.get("usage_charged"):
                 await db.update_usage(job.user_id, job.bot_id, input_size)
                 await jobs.update(job.job_id, extra={**job.extra, "usage_charged": True})
-            await send_completion_notice(client, job.user_id, parts=len(parts))
+            await send_completion_notice(client, job.user_id, results=sent_results, parts=len(parts))
             await status.edit_text("✅ **Processing Complete!**\n\n" f"📂 `{output_name}`\n" f"📦 `{humanbytes(os.path.getsize(output_path))}`\n" f"🧩 Parts: `{len(parts)}`")
         except FloodWait as exc:
             await status.edit_text(f"⏳ **FloodWait**\nWaiting `{exc.value}` seconds...")
