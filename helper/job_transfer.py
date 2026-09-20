@@ -82,7 +82,6 @@ async def download_job(client: Client, message: Message, job: Job, status: Messa
         actual = os.path.getsize(job.input_path)
         if not expected_size or actual == expected_size:
             await jobs.update(job.job_id, extra={**job.extra, "downloaded_size": actual})
-            await _delete_rename_source(client, job)
             await protect_transfer_message(status)
             return actual
         try:
@@ -132,7 +131,9 @@ async def download_job(client: Client, message: Message, job: Job, status: Messa
             raise RuntimeError(f"Incomplete download: expected {humanbytes(expected_size)}, got {humanbytes(actual)}")
         await jobs.update(job.job_id, extra={**job.extra, "downloaded_size": actual})
         await progress_for_pyrogram(actual, expected_size or actual, "Downloading", status, started, job.job_id)
-        await _delete_rename_source(client, job)
+        # Do not delete the original message here. This call is intentionally
+        # deferred until after the upload completes so the transition from
+        # 100% download to upload has no extra Telegram API delay.
         await protect_transfer_message(status)
         return actual
     except AniToonTransferCancelled:
