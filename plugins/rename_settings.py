@@ -58,15 +58,6 @@ async def show_settings(client: Client, user_id: int, message: Message | None = 
         await client.send_message(user_id, text, reply_markup=settings_markup())
 
 
-@Client.on_message(
-    filters.private & filters.command(["renamesettings", "rename_settings"]),
-    group=-2900,
-)
-async def rename_settings_command(client, message):
-    await show_settings(client, message.from_user.id, message)
-    raise StopPropagation
-
-
 @Client.on_callback_query(filters.regex(r"^rename_settings$"), group=-2900)
 async def rename_settings_button(client, cb):
     await cb.answer()
