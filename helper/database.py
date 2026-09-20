@@ -88,6 +88,11 @@ class Database:
         if value and not is_valid_language(value):
             raise ValueError("Invalid language")
         await self.col.update_one({"id": int(user_id)}, {"$set": {"language": value or None}}, upsert=True)
+        try:
+            from helper.i18n import remember_language
+            remember_language(int(user_id), value or None)
+        except Exception:
+            pass
 
     async def get_language(self, user_id: int) -> str | None:
         user = await self.col.find_one({"id": int(user_id)}, {"language": 1})
