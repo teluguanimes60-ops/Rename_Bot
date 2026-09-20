@@ -116,6 +116,14 @@ async def _finish_delivery(client, message, job, status):
     await protect_result(status)
     chat_id = getattr(getattr(message, "chat", None), "id", None) or int(job.user_id)
     await _delete_message_safely(client, chat_id, (job.extra or {}).get("rename_prompt_message_id"))
+    # Delete the original source only after the output upload is complete.
+    # This avoids a Telegram API round-trip between download completion and
+    # the start of the upload stage.
+    try:
+        from helper.job_transfer import _delete_rename_source
+        await _delete_rename_source(client, job)
+    except Exception:
+        pass
     status_chat_id = getattr(getattr(status, "chat", None), "id", None) or int(job.user_id)
     await _delete_message_safely(client, status_chat_id, status.id)
 
