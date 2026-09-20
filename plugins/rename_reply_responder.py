@@ -111,6 +111,36 @@ async def _finish_delivery(client, message, job, status):
 
 
 
+
+async def run_name_job_serialized(client, message, job, processor):
+    """Run a rename job only after all earlier rename jobs for this user finish."""
+    queue_position = await jobs.user_queue_position(job.job_id)
+    queue_message = None
+    if queue_position > 0:
+        queue_message = await message.reply_text(
+            f"⏳ **Added to queue — position #{queue_position}**\n\n"
+            "The previous file is still processing. This file will start automatically when its turn arrives."
+        )
+
+    user_lock = await jobs.user_lock(message.from_user.id)
+    async with user_lock:
+        current = await jobs.get(job.job_id)
+        if not current:
+            return None
+
+        if queue_message:
+            try:
+                await queue_message.edit_text("▶️ **Your file is now starting...**")
+            except Exception:
+                pass
+
+        task = await register_task(current.job_id)
+        try:
+            return await processor(current)
+        finally:
+            await unregister_task(current.job_id, task)
+
+
 async def process_custom_name_job(client, message, job, name: str):
     """Process a rename job without changing the source video media data."""
     source_ext = _extension(job.original_name)
@@ -246,18 +276,10 @@ async def reliable_rename_reply(client, message):
     if not text:
         await _delete_message_safely(client, message.chat.id, message.id); raise StopPropagation
     await jobs.update(job.job_id, extra={**job.extra, "name_submitted": True})
-    queue_position = await jobs.user_queue_position(job.job_id)
-    queue_message = None
-    if queue_position > 0:
-        queue_message = await message.reply_text(f"⏳ **Added to queue — position #{queue_position}**\n\nThe previous file is still processing. This file will start automatically when its turn arrives.")
-    user_lock = await jobs.user_lock(message.from_user.id)
-    async with user_lock:
-        current = await jobs.get(job.job_id)
-        if not current: return
-        if queue_message:
-            try: await queue_message.edit_text("▶️ **Your file is now starting...**")
-            except Exception: pass
-        task = await register_task(job.job_id)
-        try: await _process_named_job(client, message, current)
-        finally: await unregister_task(job.job_id, task)
+    await run_name_job_serialized(
+        client,
+        message,
+        job,
+        lambda current: _process_named_job(client, message, current),
+    )
     raise StopPropagation
