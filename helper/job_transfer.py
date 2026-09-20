@@ -167,15 +167,44 @@ def completion_markup():
     ])
 
 
-async def send_completion_notice(client: Client, user_id: int, *, parts: int = 1):
-    """Send the processing notice separately from the uploaded file."""
+def _message_filename(message) -> str:
+    media = (
+        getattr(message, "document", None)
+        or getattr(message, "video", None)
+        or getattr(message, "audio", None)
+    )
+    return str(getattr(media, "file_name", "") or "").strip()
+
+
+async def send_completion_notice(
+    client: Client,
+    user_id: int,
+    *,
+    results=None,
+    filenames=None,
+    parts: int = 1,
+):
+    """Send a separate success notice and list every uploaded filename."""
     try:
-        extra = ""
-        if int(parts or 1) > 1:
-            extra = "\n\n🧩 **Parts:** `" + str(int(parts)) + "`"
+        names = [str(name).strip() for name in (filenames or []) if str(name).strip()]
+        for result in results or []:
+            name = _message_filename(result)
+            if name and name not in names:
+                names.append(name)
+
+        lines = [
+            "✅ **AniToon Processed**",
+            "",
+            "Your file has been processed successfully.",
+        ]
+        if names:
+            lines.extend(["", "📂 **Files:**"])
+            lines.extend(f"• `{name}`" for name in names)
+        elif int(parts or 1) > 1:
+            lines.extend(["", f"🧩 **Parts:** `{int(parts)}`"])
         return await client.send_message(
             user_id,
-            "✅ **AniToon Processed**\n\nYour file has been processed successfully." + extra,
+            "\n".join(lines),
             reply_markup=completion_markup(),
         )
     except Exception:
