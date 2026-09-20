@@ -407,24 +407,24 @@ async def cb_settings_thumb(
     callback_query,
 ):
     await callback_query.answer()
+    from language.strings import tr
     user_id = int(callback_query.from_user.id)
+    lang = await db.get_language(user_id) or "en"
     mode = await db.get_thumbnail_mode(user_id)
-    mode_names = {
-        "none": "🚫 No Thumbnail",
-        "auto": "🤖 Auto Thumbnail",
-        "custom": "🖼 Permanent Thumbnail",
-    }
     thumb = await db.get_thumbnail(user_id)
-    saved = "✅ Custom image saved" if thumb else "❌ No custom image saved"
+
+    mode_names = {
+        "none": "🚫 " + tr(lang, "No Thumbnail"),
+        "auto": "🤖 " + tr(lang, "Auto Thumbnail"),
+        "custom": "🖼 " + tr(lang, "Custom Thumbnail"),
+    }
+    saved = "✅ " + tr(lang, "Custom Thumbnail") if thumb else "❌ " + tr(lang, "No Thumbnail")
+
     text = (
-        "🖼 **Thumbnail Settings**\n\n"
-        f"**Current mode:** {mode_names.get(mode, mode_names['none'])}\n"
-        f"{saved}\n\n"
-        "**Modes**\n"
-        "🚫 No Thumbnail — no thumbnail is attached to files or videos.\n"
-        "🤖 Auto Thumbnail — use the video frame/source file thumbnail when available.\n"
-        "🖼 Permanent Thumbnail — use your saved image on processed files and videos.\n\n"
-        "New users start with **No Thumbnail** by default."
+        f"🖼 **{tr(lang, 'Thumbnail')} {tr(lang, 'Settings')}**\n\n"
+        f"**{tr(lang, 'Choose an operation:')}**\n"
+        f"**Current:** {mode_names.get(mode, mode_names['none'])}\n"
+        f"{saved}"
     )
     await edit_callback_message(
         callback_query,
