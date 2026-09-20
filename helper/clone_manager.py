@@ -63,7 +63,7 @@ class CloneManager:
                 api_hash=Config.API_HASH,
                 bot_token=bot_token,
                 in_memory=True,
-                workers=100,
+                workers=Config.PYROGRAM_WORKERS,
                 plugins={"root": "plugins"},
             )
             client.is_main_bot = False
