@@ -73,12 +73,6 @@ async def show_metadata(client: Client, chat_id: int, message: Message | None = 
         await client.send_message(int(chat_id), text, reply_markup=metadata_keyboard())
 
 
-@Client.on_message(filters.private & filters.command(["metadata", "metasettings"]), group=-3000)
-async def metadata_settings(client: Client, message: Message):
-    await show_metadata(client, message.from_user.id, message)
-    raise StopPropagation
-
-
 @Client.on_callback_query(filters.regex(r"^metadata_settings$"), group=-3000)
 async def cb_metadata_settings(client: Client, cb):
     await cb.answer()
