@@ -70,12 +70,67 @@ def _extract_output_text(data: dict) -> str:
 
 
 
-def apply_permanent_template(template: str, filename: str) -> str:
+def extract_template_values(filename: str) -> dict[str, str]:
     original = os.path.basename(str(filename or ""))
     stem, ext = os.path.splitext(original)
+    clean = heuristic_auto_name(original)
+
+    season = ""
+    episode = ""
+    year = ""
+    resolution = ""
+    language = ""
+
+    match = re.search(r"\bS(\d{1,2})\b", stem, re.I)
+    if match:
+        season = f"S{match.group(1)}"
+    match = re.search(r"\b(?:E|EP|Episode)\s*[-._ ]?\s*(\d{1,4})\b", stem, re.I)
+    if match:
+        episode = f"E{match.group(1)}"
+    match = re.search(r"\b(19\d{2}|20\d{2})\b", stem)
+    if match:
+        year = match.group(1)
+    match = re.search(r"\b(2160p|1440p|1080p|720p|576p|480p|4k|8k)\b", stem, re.I)
+    if match:
+        resolution = match.group(1)
+
+    languages = {
+        "english": "English", "japanese": "Japanese", "korean": "Korean",
+        "chinese": "Chinese", "hindi": "Hindi", "telugu": "Telugu",
+        "tamil": "Tamil", "malayalam": "Malayalam", "french": "French",
+        "german": "German", "spanish": "Spanish", "italian": "Italian",
+        "portuguese": "Portuguese", "russian": "Russian", "arabic": "Arabic",
+    }
+    lowered = stem.lower()
+    for key, label in languages.items():
+        if re.search(r"\b" + re.escape(key) + r"\b", lowered):
+            language = label
+            break
+
+    return {
+        "name": stem,
+        "filename": original,
+        "ext": ext.lstrip("."),
+        "title": clean,
+        "season": season,
+        "episode": episode,
+        "year": year,
+        "resolution": resolution,
+        "language": language,
+    }
+
+
+def apply_permanent_template(template: str, filename: str) -> str:
+    values = extract_template_values(filename)
     rendered = str(template or "").strip()
-    rendered = rendered.replace("{name}", stem).replace("{filename}", original).replace("{ext}", ext.lstrip("."))
-    return _safe_stem(rendered) or _safe_stem(stem) or "AniToon"
+    for key, value in values.items():
+        rendered = rendered.replace("{" + key + "}", value)
+    # Clean empty placeholder remnants and whitespace without changing the
+    # user's meaningful text.
+    rendered = re.sub(r"\s+", " ", rendered)
+    rendered = re.sub(r"\s*[-|:_/]+\s*[-|:_/]+", " - ", rendered)
+    rendered = rendered.strip(" .-_|:")
+    return _safe_stem(rendered) or _safe_stem(values["name"]) or "AniToon"
 async def ai_auto_name(filename: str) -> str:
     fallback = heuristic_auto_name(filename)
     api_key = getattr(Config, "OPENAI_API_KEY", "").strip()
