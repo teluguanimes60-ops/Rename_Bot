@@ -42,7 +42,7 @@ def thumbnail_menu():
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("🚫 No Thumbnail", callback_data="thumb_mode:none")],
         [InlineKeyboardButton("🤖 Auto Thumbnail", callback_data="thumb_mode:auto")],
-        [InlineKeyboardButton("🖼 Permanent Thumbnail", callback_data="thumb_mode:custom")],
+        [InlineKeyboardButton("🖼 Custom Thumbnail", callback_data="thumb_mode:custom")],
         [InlineKeyboardButton("🔙 Back", callback_data="settings")],
     ])
 
