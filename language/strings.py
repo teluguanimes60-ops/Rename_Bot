@@ -148,6 +148,9 @@ def localize_markup(markup, lang: str | None):
             ("🤖 Auto Thumbnail", "🤖 " + tr(lang, "Auto Thumbnail")),
             ("🌐 Language", "🌐 " + tr(lang, "Language")),
             ("🏷 Metadata", "🏷 " + tr(lang, "Metadata")),
+            ("🖼 Thumbnail", "🖼 " + tr(lang, "Thumbnail")),
+            ("✏️ Rename Mode", "✏️ " + tr(lang, "Rename")),
+            ("🤖 Create Your Own Clone Bot", "🤖 " + STRINGS.get(str(lang or "en").lower(), STRINGS["en"]).get("Create Your Own Clone Bot", "Create Your Own Clone Bot")),
         ]
         for source, translated in mappings:
             if text.startswith(source):
