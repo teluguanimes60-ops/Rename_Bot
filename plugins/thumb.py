@@ -30,16 +30,28 @@ async def save_photo(
     )
 
     try:
+        old_thumbnail = await db.get_thumbnail(user_id)
+
+        # Setting the new Telegram file_id replaces the previous permanent
+        # thumbnail for this user. No old thumbnail is retained.
         await db.set_thumbnail(
             user_id,
             message.photo.file_id,
         )
         await db.set_thumbnail_mode(user_id, "custom")
 
-        await status.edit_text(
-            "✅ **Thumbnail Saved Successfully!**\n\n"
-            "This thumbnail will be used for your renamed files."
-        )
+        if old_thumbnail:
+            result_text = (
+                "✅ **Permanent Thumbnail Replaced Successfully!**\n\n"
+                "The new image is now your active permanent thumbnail."
+            )
+        else:
+            result_text = (
+                "✅ **Permanent Thumbnail Saved Successfully!**\n\n"
+                "This image is now your active permanent thumbnail."
+            )
+
+        await status.edit_text(result_text)
 
     except Exception as e:
         await status.edit_text(
