@@ -143,6 +143,7 @@ async def run_name_job_serialized(client, message, job, processor):
 
 async def process_custom_name_job(client, message, job, name: str):
     """Process a rename job without changing the source video media data."""
+    await jobs.update(job.job_id, extra={**job.extra, "processing": True, "state": "processing"})
     source_ext = _extension(job.original_name)
     video_mode = (job.extra or {}).get("rename_output_mode") == "video"
 
@@ -275,7 +276,7 @@ async def reliable_rename_reply(client, message):
     text = message.text.strip()
     if not text:
         await _delete_message_safely(client, message.chat.id, message.id); raise StopPropagation
-    await jobs.update(job.job_id, extra={**job.extra, "name_submitted": True})
+    await jobs.update(job.job_id, extra={**job.extra, "name_submitted": True, "submitted_name": text, "state": "queued"})
     await run_name_job_serialized(
         client,
         message,
