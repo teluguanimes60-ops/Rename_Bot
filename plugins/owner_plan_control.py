@@ -31,9 +31,9 @@ async def _owner_plans_text(client, user_id: int):
         '💎 **AniToon Plans**\n\n'
         f'👤 **Your current plan:** {current.name}\n'
         f'📦 **Daily limit:** `{humanbytes(current.daily_limit)}`\n'
-        f'⭐ **Price:** `{current.stars} Stars`\n'
+'
         f'📅 **Duration:** `{duration}`\n\n'
-        'Choose one of the four plans below to change your owner account plan.'
+'Choose Free, Pro, Premium, or Ultra to switch your owner account plan without Stars.'
     )
 
 
