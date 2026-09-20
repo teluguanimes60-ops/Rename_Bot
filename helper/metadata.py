@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import re
 
 from helper.database import db
 
@@ -182,6 +183,113 @@ async def update_metadata_part(
     await save_metadata(user_id, updated)
     return updated
 
+
+
+
+def _detect_language_from_title(title: str) -> str:
+    text = str(title or "").strip()
+    if not text:
+        return ""
+    lowered = text.lower()
+    for code, name in LANGUAGE_NAMES.items():
+        if re.search(r"\b" + re.escape(name.lower()) + r"\b", lowered):
+            return name
+    return ""
+
+
+def _track_language_name(tags: dict, fallback: str) -> tuple[str, str | None]:
+    code = str((tags or {}).get("language") or "").strip()
+    name = language_name(code, "")
+    if not name:
+        name = _detect_language_from_title((tags or {}).get("title"))
+    if not name:
+        name = fallback
+    normalized_code = code if code and code.lower() != "und" else None
+    return name, normalized_code
+
+
+async def apply_metadata_to_media(input_file: str, output_file: str, settings: MetadataSettings) -> str | None:
+    """Remux media without re-encoding and label every audio/subtitle track.
+
+    Video/audio codecs are copied exactly. The only changes are stream metadata:
+    language tags are preserved when present and the title becomes
+    '<prefix> <Language> <suffix>'.
+    """
+    import asyncio
+    import json
+    import os
+
+    if not os.path.isfile(input_file) or os.path.getsize(input_file) <= 0:
+        return None
+
+    cmd = ["ffmpeg", "-y", "-i", input_file, "-map", "0", "-c", "copy"]
+    data = await _probe_local(input_file)
+    audio_i = 0
+    subtitle_i = 0
+
+    for stream in data.get("streams", []):
+        kind = stream.get("codec_type")
+        if kind not in {"audio", "subtitle"}:
+            continue
+
+        tags = stream.get("tags") or {}
+        fallback = "Unknown"
+        language, code = _track_language_name(
+            tags,
+            fallback,
+        )
+
+        if kind == "audio":
+            prefix, suffix = settings.audio_prefix, settings.audio_suffix
+            spec = f"a:{audio_i}"
+            audio_i += 1
+        else:
+            prefix, suffix = settings.subtitle_prefix, settings.subtitle_suffix
+            spec = f"s:{subtitle_i}"
+            subtitle_i += 1
+
+        title = _join(prefix, language, suffix)
+        cmd += [f"-metadata:s:{spec}", f"title={title}"]
+        if code:
+            cmd += [f"-metadata:s:{spec}", f"language={code}"]
+
+    if audio_i == 0 and subtitle_i == 0:
+        if os.path.abspath(input_file) != os.path.abspath(output_file):
+            import shutil
+            shutil.copy2(input_file, output_file)
+        return output_file
+
+    cmd.append(output_file)
+
+    from helper.ffmpeg import _run_ffmpeg
+
+    duration = 0.0
+    try:
+        duration = float(data.get("format", {}).get("duration", 0) or 0)
+    except (TypeError, ValueError):
+        duration = 0.0
+
+    ok = await _run_ffmpeg(cmd, None, duration)
+    if not ok or not os.path.isfile(output_file) or os.path.getsize(output_file) <= 0:
+        return None
+    return output_file
+
+
+async def _probe_local(file_path: str) -> dict:
+    import asyncio
+    import json
+
+    cmd = ["ffprobe", "-v", "error", "-print_format", "json", "-show_streams", "-show_format", file_path]
+    process = await asyncio.create_subprocess_exec(
+        *cmd,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.DEVNULL,
+    )
+    stdout, _ = await process.communicate()
+    try:
+        return json.loads(stdout.decode(errors="ignore"))
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        return {}
 
 async def reset_metadata(user_id: int) -> MetadataSettings:
     settings = MetadataSettings()
