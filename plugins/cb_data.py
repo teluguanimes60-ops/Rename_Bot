@@ -14,6 +14,7 @@ from plugins.ui import (
     settings_menu,
     help_menu,
     thumbnail_menu,
+    permanent_thumbnail_menu,
     edit_callback_message,
     language_keyboard,
     language_confirm_keyboard,
