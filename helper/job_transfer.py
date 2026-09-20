@@ -207,14 +207,11 @@ async def upload_job(client: Client, job: Job, path: str, filename: str, status:
         except Exception:
             pass
 
-        # prepare_video_for_telegram() already guarantees fast-start MP4 output.
-        # Skip a second atom scan/remux for outputs prepared by _send_video().
-        if as_video and not prepared_video and _needs_faststart(path):
-            from helper.ffmpeg import make_streamable
-            temporary_streamable = os.path.join(job.work_dir, f".streamable_{job.job_id}.mp4")
-            prepared = await make_streamable(path, temporary_streamable)
-            if prepared and os.path.isfile(prepared):
-                upload_path = prepared
+        # Do not remux, re-encode, resize, or otherwise alter the uploaded
+        # video during a normal rename/upload. The original media path is
+        # uploaded as-is so codec, resolution, bitrate and file size remain
+        # unchanged. Explicit Convert/Trim/metadata operations may create a
+        # new output before this stage.
 
         size = os.path.getsize(upload_path)
         caption = await _output_caption_for_job(job, filename, size)
