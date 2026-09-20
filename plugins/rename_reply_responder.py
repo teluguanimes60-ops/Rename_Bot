@@ -10,51 +10,13 @@ from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from helper.activity_log import mark_rename_completed
 from helper.cancel_manager import register_task, unregister_task
 from helper.database import db
-from helper.ffmpeg import convert_media, inspect_media_streams, prepare_video_for_telegram, remux_with_track_names
+from helper.ffmpeg import convert_media, inspect_media_streams
 from helper.job_state import jobs
 from helper.job_transfer import download_job
 from helper.message_cleanup import protect_result, protect_transfer_message
 from helper.utils import AniToonTransferCancelled, clear_transfer_cancel, humanbytes, progress_for_pyrogram, reset_progress
 from plugins.file_action_fix import _deliver_output
 from plugins.rename import _base_without_extension, _extension, _safe_filename
-async def _apply_metadata_settings(job, output_path: str) -> None:
-    """Apply prefix + language + suffix to every audio/subtitle track without re-encoding."""
-    if not os.path.isfile(output_path):
-        return
-    video_exts = {".mp4", ".mkv", ".webm", ".mov", ".avi", ".flv", ".ts", ".m4v"}
-    if os.path.splitext(output_path)[1].lower() not in video_exts:
-        return
-    try:
-        streams = await inspect_media_streams(output_path)
-        if not streams:
-            return
-        from helper.metadata import get_metadata
-        settings = await get_metadata(job.user_id)
-        from helper.metadata import language_name
-        titles = {}
-        audio_index = subtitle_index = 0
-        for stream in streams:
-            if stream["type"] == "audio":
-                language = language_name(stream.get("language"), settings.audio_language)
-                title = " ".join(x for x in (settings.audio_prefix, language, settings.audio_suffix) if x).strip()
-                titles[f"audio:{audio_index}"] = title
-                audio_index += 1
-            elif stream["type"] == "subtitle":
-                language = language_name(stream.get("language"), settings.subtitle_language)
-                title = " ".join(x for x in (settings.subtitle_prefix, language, settings.subtitle_suffix) if x).strip()
-                titles[f"subtitle:{subtitle_index}"] = title
-                subtitle_index += 1
-        if not titles:
-            return
-        temp = os.path.join(job.work_dir, ".metadata_" + os.path.basename(output_path))
-        if await remux_with_track_names(output_path, temp, titles) and os.path.isfile(temp) and os.path.getsize(temp) > 0:
-            os.replace(temp, output_path)
-        elif os.path.exists(temp):
-            os.remove(temp)
-    except Exception:
-        return
-
-
 NAME_ACTIONS = {"custom_name", "convert_name"}
 
 
@@ -209,7 +171,6 @@ async def _process_named_job(client, message, job):
             await _download_source(client, message, job, status)
             output_path = os.path.join(job.work_dir, name)
             if not await _convert_with_progress(job, status, output_path, ext, name): raise RuntimeError("FFmpeg conversion failed")
-            await _apply_metadata_settings(job, output_path)
             results = await _deliver_output(client, job, output_path, name, status)
             if not results: raise RuntimeError("Telegram returned no uploaded result")
             size = int((job.extra or {}).get("downloaded_size", 0) or os.path.getsize(job.input_path))
