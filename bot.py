@@ -24,6 +24,10 @@ BOT_COMMANDS = [
     BotCommand("help", "Show help"),
     BotCommand("cancel", "Cancel current processing"),
     BotCommand("clone", "Create a clone bot"),
+    BotCommand("rename", "Open rename page"),
+    BotCommand("thumbnail", "Open thumbnail page"),
+    BotCommand("plan", "Open plans"),
+    BotCommand("language", "Change language"),
 ]
 
 
