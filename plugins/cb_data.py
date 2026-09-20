@@ -452,12 +452,13 @@ async def cb_thumbnail_mode(
         has_thumbnail = bool(await db.get_thumbnail(user_id))
         await callback_query.answer()
 
+        from language.strings import tr
+        lang = await db.get_language(user_id) or "en"
         if not has_thumbnail:
             await edit_callback_message(
                 callback_query,
-                "🖼 **Permanent Thumbnail**\n\n"
-                "You don't have a permanent thumbnail yet.\n\n"
-                "Press **➕ Add Thumbnail** and then send your image.",
+                f"🖼 **{tr(lang, 'Custom Thumbnail')}**\n\n"
+                f"➕ {tr(lang, 'Add Thumbnail')}",
                 reply_markup=permanent_thumbnail_menu(False),
             )
             return
@@ -465,9 +466,8 @@ async def cb_thumbnail_mode(
         await db.set_thumbnail_mode(user_id, "custom")
         await edit_callback_message(
             callback_query,
-            "🖼 **Permanent Thumbnail**\n\n"
-            "Your saved thumbnail is active for all processed files and videos.\n\n"
-            "Press **👁 Show Thumbnail** to view the last thumbnail you saved.",
+            f"🖼 **{tr(lang, 'Custom Thumbnail')}**\n\n"
+            f"👁 {tr(lang, 'Show Thumbnail')}",
             reply_markup=permanent_thumbnail_menu(True),
         )
         return
@@ -496,11 +496,13 @@ async def cb_view_thumb(
     await callback_query.answer()
     thumb = await db.get_thumbnail(callback_query.from_user.id)
     if not thumb:
+        from language.strings import tr
+        lang = await db.get_language(callback_query.from_user.id) or "en"
         return await edit_callback_message(
             callback_query,
-            "❌ **No custom thumbnail is saved.**\n\n"
-            "Choose **Permanent Thumbnail** and send an image.",
-            reply_markup=permanent_thumbnail_menu(),
+            f"❌ **{tr(lang, 'Custom Thumbnail')}**\n\n"
+            f"➕ {tr(lang, 'Add Thumbnail')}",
+            reply_markup=permanent_thumbnail_menu(False),
         )
     try:
         await client.send_photo(
@@ -527,14 +529,16 @@ async def cb_delete_thumb(
 ):
     await db.set_thumbnail(callback_query.from_user.id, None)
     await db.set_thumbnail_mode(callback_query.from_user.id, "none")
+    from language.strings import tr
+    lang = await db.get_language(callback_query.from_user.id) or "en"
     await callback_query.answer(
-        "Custom thumbnail deleted. No Thumbnail mode restored ✅",
+        f"🗑 {tr(lang, 'Delete Custom')} — {tr(lang, 'No Thumbnail')}",
         show_alert=True,
     )
     await edit_callback_message(
         callback_query,
-        "🗑️ **Custom thumbnail deleted.**\n\n"
-        "Current mode: **🚫 No Thumbnail**",
+        f"🗑️ **{tr(lang, 'Delete Custom')}**\n\n"
+        f"🚫 **{tr(lang, 'No Thumbnail')}**",
         reply_markup=thumbnail_menu(),
     )
 
