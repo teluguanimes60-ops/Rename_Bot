@@ -123,18 +123,23 @@ async def _finish_delivery(client, message, job, status):
 
 
 async def process_custom_name_job(client, message, job, name: str):
-    """Process a rename job using a filename selected by a rename mode."""
+    """Process a rename job without changing the source video media data."""
     source_ext = _extension(job.original_name)
     video_mode = (job.extra or {}).get("rename_output_mode") == "video"
 
     safe_name = _safe_filename(name)
     if video_mode:
-        safe_name = f"{_base_without_extension(safe_name)}.mp4"
+        # Normal rename never re-encodes or remuxes the source.
+        safe_name = (
+            f"{_base_without_extension(safe_name)}.{source_ext}"
+            if source_ext
+            else safe_name
+        )
     else:
         if not _extension(safe_name) and source_ext:
             safe_name = f"{safe_name}.{source_ext}"
         elif _extension(safe_name) and source_ext:
-            safe_name = f"\{_base_without_extension(safe_name)}.\{source_ext}"
+            safe_name = f"{_base_without_extension(safe_name)}.{source_ext}"
 
     status = await _new_transfer_status(
         client,
@@ -145,52 +150,25 @@ async def process_custom_name_job(client, message, job, name: str):
     try:
         await _download_source(client, message, job, status)
 
-        if video_mode:
-            prepared_path = os.path.join(job.work_dir, ".converted_video.mp4")
+        output_path = os.path.join(job.work_dir, safe_name)
+        os.replace(job.input_path, output_path)
 
-
-            # Rename-to-video must not display a separate conversion stage.
-            # The preparation step never resizes the video; it stream-copies
-            # compatible codecs and only transcodes when Telegram requires it.
-            prepared = await prepare_video_for_telegram(
-                job.input_path,
-                prepared_path,
-                None,
-            )
-            if not prepared or not os.path.isfile(prepared):
-                raise RuntimeError(
-                    "Could not convert the source into a Telegram-compatible MP4 video"
-                )
-            job.mime_type = "video/mp4"
-            await _apply_metadata_settings(job, prepared)
-            results = await _deliver_output(
-                client,
-                job,
-                prepared,
-                safe_name,
-                status,
-                prepared_video=True,
-            )
-            output_for_size = prepared
-        else:
-            output_path = os.path.join(job.work_dir, safe_name)
-            os.replace(job.input_path, output_path)
-            await _apply_metadata_settings(job, output_path)
-            results = await _deliver_output(
-                client,
-                job,
-                output_path,
-                safe_name,
-                status,
-            )
-            output_for_size = output_path
+        # MP4 is sent as a native Telegram video; other containers remain
+        # untouched and are uploaded using Telegram's document message.
+        results = await _deliver_output(
+            client,
+            job,
+            output_path,
+            safe_name,
+            status,
+        )
 
         if not results:
             raise RuntimeError("Telegram returned no uploaded result")
 
         size = int(
             (job.extra or {}).get("downloaded_size", 0)
-            or os.path.getsize(output_for_size)
+            or os.path.getsize(output_path)
         )
         await db.update_usage(job.user_id, job.bot_id, size)
         await mark_rename_completed(job.job_id)
@@ -209,16 +187,13 @@ async def process_custom_name_job(client, message, job, name: str):
         raise
     except Exception as exc:
         try:
-            await status.edit_text(
-                f"❌ **Rename failed**\n\n\`{str(exc)[:1000]}\`"
-            )
+            await status.edit_text(f"❌ **Rename failed**\n\n`{str(exc)[:1000]}`")
         except Exception:
             pass
     finally:
         clear_transfer_cancel(job.job_id)
         shutil.rmtree(job.work_dir, ignore_errors=True)
         await jobs.remove(job.job_id)
-
 
 async def _process_named_job(client, message, job):
     action = job.selected_action
@@ -257,10 +232,11 @@ async def _process_named_job(client, message, job):
     if action == "custom_name":
         source_ext = _extension(job.original_name)
         video_mode = (job.extra or {}).get("rename_output_mode") == "video"
+        name = _safe_filename(text)
         if video_mode:
-            name = f"{_base_without_extension(_safe_filename(text))}.mp4"
+            if source_ext:
+                name = f"{_base_without_extension(name)}.{source_ext}"
         else:
-            name = _safe_filename(text)
             if not _extension(name) and source_ext:
                 name = f"{name}.{source_ext}"
             elif _extension(name) and source_ext:
