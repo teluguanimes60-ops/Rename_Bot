@@ -161,8 +161,30 @@ async def _send_with_floodwait_retry(send_callable, *args, **kwargs):
             await asyncio.sleep(wait_time)
     raise RuntimeError("Telegram send retry loop ended unexpectedly")
 
+def completion_markup():
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("📢 Join Our Channels", url="https://t.me/Anitoon_edit/33")]
+    ])
+
+
+async def send_completion_notice(client: Client, user_id: int, *, parts: int = 1):
+    """Send the processing notice separately from the uploaded file."""
+    try:
+        extra = ""
+        if int(parts or 1) > 1:
+            extra = "\n\n🧩 **Parts:** `" + str(int(parts)) + "`"
+        return await client.send_message(
+            user_id,
+            "✅ **AniToon Processed**\n\nYour file has been processed successfully." + extra,
+            reply_markup=completion_markup(),
+        )
+    except Exception:
+        return None
+
+
 async def _output_caption_for_job(job: Job, filename: str, size: int, duration: float = 0) -> str:
-    default = f"✅ **AniToon Processed**\n\n📂 `{filename}`\n📦 `{humanbytes(size)}`"
+    # The success message is sent separately. Keep the default file caption empty.
+    default = ""
     try:
         from helper.database import db
         saved = await db.get_caption(job.user_id)
@@ -171,7 +193,6 @@ async def _output_caption_for_job(job: Job, filename: str, size: int, duration: 
     if not saved:
         return default
     return str(saved).replace("{filename}", filename).replace("{filesize}", humanbytes(size)).replace("{duration}", str(int(duration)))
-
 async def upload_job(client: Client, job: Job, path: str, filename: str, status: Message | None = None, *, as_video: bool = False, prepared_video: bool = False):
     """Upload a file. When as_video=True, send a real streamable Telegram video."""
     if not os.path.isfile(path) or os.path.getsize(path) <= 0:
