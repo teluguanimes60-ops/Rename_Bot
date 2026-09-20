@@ -37,11 +37,11 @@ def _section_text(kind: str, settings: MetadataSettings) -> str:
     if kind == "audio":
         prefix, suffix = settings.audio_prefix, settings.audio_suffix
         title = "🎵 **Audio Metadata**"
-        example = _show(settings.audio_name)
+        example = " ".join(x for x in (prefix, "<Language>", suffix) if x).strip()
     else:
         prefix, suffix = settings.subtitle_prefix, settings.subtitle_suffix
         title = "📜 **Subtitle Metadata**"
-        example = _show(settings.subtitle_name)
+        example = " ".join(x for x in (prefix, "<Language>", suffix) if x).strip()
     return (
         f"{title}\n\n"
         "Language: **Auto-detected per track**\n"
