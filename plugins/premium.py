@@ -49,55 +49,6 @@ async def send_plan_menu(client, chat_id, target_bot_id):
         reply_markup=InlineKeyboardMarkup(buttons),
     )
 
-@Client.on_message(filters.private & filters.command("plans"), group=-2500)
-async def plans_command(client, message):
-    user_id = int(message.from_user.id)
-    bot_id = get_bot_id(client)
-    if not await db.is_user_exist(user_id):
-        await db.add_user(user_id)
-    if is_main_bot(client):
-        await send_plan_menu(client, user_id, bot_id)
-        return
-    if not Config.MAIN_BOT_USERNAME:
-        await message.reply_text("❌ **Main payment bot is not configured.**")
-        return
-    url = f"https://t.me/{Config.MAIN_BOT_USERNAME}?start=plans_{bot_id}"
-    keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("⭐ Open Plans", url=url)]])
-    await message.reply_text("💎 **AniToon Plans**\n\nPremium purchases are handled by the main AniToon payment bot.", reply_markup=keyboard)
-
-@Client.on_message(filters.private & filters.command(["plan", "myplan", "status"]))
-async def user_plan_status(client, message):
-    user_id = message.from_user.id
-    bot_id = get_bot_id(client)
-    if not await db.is_user_exist(user_id):
-        await db.add_user(user_id)
-    subscription = await db.get_subscription(user_id, bot_id)
-    plan = get_plan(subscription.get("plan", "free"))
-    used = await db.get_usage(user_id, bot_id)
-    remaining = max(plan.daily_limit - used, 0)
-    expires_at = subscription.get("expires_at")
-    expiry_text = expires_at.strftime("%d %b %Y, %H:%M") if expires_at else "No expiry"
-    text = (
-        "📊 **AniToon Plan Status**\n\n"
-        f"👤 **User:** `{message.from_user.first_name}`\n"
-        f"🆔 **ID:** `{user_id}`\n\n"
-        f"💎 **Plan:** {plan.name}\n"
-        f"⭐ **Price:** `{plan.stars} Stars`\n"
-        f"📈 **Used Today:** `{humanbytes(used)}`\n"
-        f"⏳ **Remaining:** `{humanbytes(remaining)}`\n"
-        f"📅 **Expires:** `{expiry_text}`"
-    )
-    if is_main_bot(client):
-        keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("💎 View Plans", callback_data="upgrade")]])
-    elif Config.MAIN_BOT_USERNAME:
-        keyboard = InlineKeyboardMarkup([[
-            InlineKeyboardButton("💎 Buy / Upgrade", url=f"https://t.me/{Config.MAIN_BOT_USERNAME}?start=plans_{bot_id}")
-        ]])
-    else:
-        keyboard = None
-    await message.reply_text(text, reply_markup=keyboard)
-
-
 @Client.on_callback_query(filters.regex("^upgrade$"))
 async def upgrade_button(client, callback_query):
     await callback_query.answer()
@@ -268,9 +219,3 @@ async def payment_message_handler(client, message):
     except Exception:
         await message.reply_text("⚠️ **Payment received, but activation failed.**\n\nPlease use `/paysupport`.")
 
-
-@Client.on_message(filters.private & filters.command("paysupport"))
-async def payment_support(client, message):
-    await message.reply_text(
-        "💳 **Payment Support**\n\nFor Stars payment or Premium activation problems, contact @AniToon_Official."
-    )
