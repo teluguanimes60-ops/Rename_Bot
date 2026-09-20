@@ -77,14 +77,18 @@ def _needs_faststart(path: str) -> bool:
 
 
 async def download_job(client: Client, message: Message, job: Job, status: Message) -> int:
+    expected_size = int(job.extra.get("telegram_file_size", 0) or 0)
     if os.path.isfile(job.input_path) and os.path.getsize(job.input_path) > 0:
         actual = os.path.getsize(job.input_path)
-        await jobs.update(job.job_id, extra={**job.extra, "downloaded_size": actual})
-        await _delete_rename_source(client, job)
-        await protect_transfer_message(status)
-        return actual
-
-    expected_size = int(job.extra.get("telegram_file_size", 0) or 0)
+        if not expected_size or actual == expected_size:
+            await jobs.update(job.job_id, extra={**job.extra, "downloaded_size": actual})
+            await _delete_rename_source(client, job)
+            await protect_transfer_message(status)
+            return actual
+        try:
+            os.remove(job.input_path)
+        except OSError:
+            pass
     source = job.extra.get("source_message") or job.extra.get("file_id") or message
     os.makedirs(job.work_dir, exist_ok=True)
 
@@ -321,35 +325,7 @@ async def upload_job(client: Client, job: Job, path: str, filename: str, status:
                     except Exception as second_exc:
                         first_exc = second_exc
 
-                # If native video upload is rejected, send the same file as a
-                # document so the completed processing job is not lost.
-                fallback_caption = await _output_caption_for_job(job, filename, size, duration)
-                fallback_kwargs = {
-                    "caption": (
-                        fallback_caption
-                        + "\n\n"
-                        + "ℹ️ Telegram did not accept this file as a native video, so it was uploaded as a document."
-                    ),
-                    "progress": progress_for_pyrogram,
-                    "progress_args": (
-                        "Uploading",
-                        status,
-                        started,
-                        job.job_id,
-                    ),
-                }
-                try:
-                    return await _send_with_floodwait_retry(
-                        client.send_document,
-                        job.user_id,
-                        upload_path,
-                        **fallback_kwargs,
-                    )
-                except Exception as fallback_exc:
-                    raise RuntimeError(
-                        f"Telegram video upload failed: {first_exc}; "
-                        f"document fallback failed: {fallback_exc}"
-                    ) from fallback_exc
+                raise RuntimeError(f"Telegram video upload failed: {first_exc}") from first_exc
 
 
         ext = os.path.splitext(filename)[1].lower()
