@@ -144,7 +144,11 @@ async def progress_for_pyrogram(current, total, ud_type, message, start, job_id=
             raise AniToonTransferCancelled("Transfer cancelled by user")
     if message is None:
         return
-    # Keep download and upload progress on separate keys so the upload stage\n    # is shown immediately after download completes; the normal throttling\n    # must never hide the stage transition.\n    stage_key = str(ud_type).strip().lower()\n    key = f"{job_id}:{stage_key}" if job_id else f"{id(message)}:{stage_key}"
+    # Keep download and upload progress on separate keys so the upload stage
+    # is shown immediately after download completes; normal throttling must
+    # never hide the stage transition.
+    stage_key = str(ud_type).strip().lower()
+    key = f"{job_id}:{stage_key}" if job_id else f"{id(message)}:{stage_key}"
     now = time.time()
     interval = max(1.0, float(getattr(Config, "PROGRESS_UPDATE_INTERVAL", 1.5)))
     last = _LAST_PROGRESS_UPDATE.get(key)
