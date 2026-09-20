@@ -23,6 +23,7 @@ log = logging.getLogger("AniToon")
 def install_runtime_localization():
     """Translate known bot UI text automatically for the selected user language."""
     from helper.i18n import localize_text, user_language
+    from language.strings import localize_markup
 
     if getattr(Client, "_anitoon_localization_installed", False):
         return
@@ -34,19 +35,32 @@ def install_runtime_localization():
     original_edit_caption = getattr(Message, "edit_caption", None)
     original_answer = CallbackQuery.answer
 
+    async def _apply_markup(user_id, kwargs):
+        markup = kwargs.get("reply_markup")
+        if getattr(markup, "inline_keyboard", None):
+            try:
+                kwargs["reply_markup"] = localize_markup(
+                    markup, await user_language(int(user_id))
+                )
+            except Exception:
+                pass
+
     async def localized_send_message(self, chat_id, text=None, *args, **kwargs):
         if isinstance(text, str):
             text = await localize_text_async(chat_id, text)
+        await _apply_markup(chat_id, kwargs)
         return await original_send_message(self, chat_id, text, *args, **kwargs)
 
     async def localized_reply_text(self, text=None, *args, **kwargs):
         if isinstance(text, str) and getattr(self, "from_user", None):
             text = await localize_text_async(self.from_user.id, text)
+            await _apply_markup(self.from_user.id, kwargs)
         return await original_reply_text(self, text, *args, **kwargs)
 
     async def localized_edit_text(self, text=None, *args, **kwargs):
         if isinstance(text, str) and getattr(self, "from_user", None):
             text = await localize_text_async(self.from_user.id, text)
+            await _apply_markup(self.from_user.id, kwargs)
         return await original_edit_text(self, text, *args, **kwargs)
 
     async def localized_reply_caption(self, caption=None, *args, **kwargs):
