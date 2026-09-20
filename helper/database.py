@@ -116,6 +116,17 @@ class Database:
         user = await self.col.find_one({"id": int(user_id)}, {"thumbnail_mode": 1})
         mode = str(user.get("thumbnail_mode", "none") if user else "none").strip().lower()
         return mode if mode in {"none", "auto", "custom"} else "none"
+    async def set_small_images_free(self, enabled: bool):
+        await self.db.settings.update_one(
+            {"key": "free_small_images"},
+            {"$set": {"key": "free_small_images", "enabled": bool(enabled)}},
+            upsert=True,
+        )
+
+    async def get_small_images_free(self) -> bool:
+        record = await self.db.settings.find_one({"key": "free_small_images"})
+        return bool(record.get("enabled", False)) if record else False
+
     async def set_caption(self, user_id: int, caption: str | None):
         await self.col.update_one({"id": int(user_id)}, {"$set": {"caption": caption}}, upsert=True)
 
