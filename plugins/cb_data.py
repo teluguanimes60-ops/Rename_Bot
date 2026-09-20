@@ -1,3 +1,24 @@
+from pyrogram import Client, filters
+from pyrogram.types import (
+    InlineKeyboardMarkup,
+    InlineKeyboardButton,
+    ForceReply,
+)
+
+from config import Config
+from helper.database import db
+from helper.plans import get_plan
+from helper.utils import humanbytes
+from plugins.ui import (
+    main_menu,
+    settings_menu,
+    help_menu,
+    thumbnail_menu,
+    edit_callback_message,
+    language_keyboard,
+    language_confirm_keyboard,
+)
+
 
 
 # ============================================================
@@ -56,7 +77,7 @@ async def cb_language_confirm(client: Client, callback_query):
         return
     await edit_callback_message(
         callback_query,
-        t(code, "language_saved") + "\\n\\n🔥 **Welcome to AniToon Bot** 🔥",
+        t(code, "language_saved") + "\n\n🔥 **Welcome to AniToon Bot** 🔥",
         reply_markup=main_menu(getattr(client, "is_main_bot", False)),
     )
 
