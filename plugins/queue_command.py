@@ -56,32 +56,3 @@ def _format_job(index: int, job, include_identity: bool = False) -> list[str]:
     return lines
 
 
-@Client.on_message(filters.private & filters.command("queue"), group=-3100)
-async def queue_info_command(client: Client, message: Message):
-    user = message.from_user
-    if not user:
-        return
-
-    owner = _is_owner(user.id)
-
-    async with jobs._lock:
-        all_jobs = sorted(list(jobs._jobs.values()), key=_job_sort_key)
-
-    if owner:
-        queued = all_jobs
-        title = f"📋 **AniToon Full Queue — {len(queued)} file(s)**"
-    else:
-        queued = [job for job in all_jobs if int(getattr(job, "user_id", 0)) == int(user.id)]
-        title = f"📋 **Your Queue — {len(queued)} file(s)**"
-
-    if not queued:
-        await message.reply_text("📋 **Your queue is empty.**" if not owner else "📋 **Queue is empty.**")
-        return
-
-    lines = [title, "━━━━━━━━━━━━━━━━━━━━"]
-    for index, job in enumerate(queued, 1):
-        lines.extend(_format_job(index, job, include_identity=owner))
-
-    text = "\n".join(lines)
-    for offset in range(0, len(text), 3800):
-        await message.reply_text(text[offset:offset + 3800])
