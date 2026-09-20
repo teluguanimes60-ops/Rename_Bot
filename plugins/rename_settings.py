@@ -114,7 +114,8 @@ async def rename_mode_button(client, cb):
         raise StopPropagation
 
     await db.set_rename_mode(user_id, mode)
-    await cb.answer("Rename mode updated ✅", show_alert=True)    await edit_callback_message(
+    await cb.answer("Rename mode updated ✅", show_alert=True)
+    await edit_callback_message(
         cb,
         await page_text(user_id),
         reply_markup=settings_markup(),
