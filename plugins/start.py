@@ -9,7 +9,7 @@ from config import Config
 from helper.database import db
 from helper.plans import get_plan, all_paid_plans
 from helper.utils import humanbytes
-from plugins.ui import main_menu
+from plugins.ui import main_menu, language_keyboard, language_confirm_keyboard
 
 log = logging.getLogger(__name__)
 
@@ -209,6 +209,16 @@ async def start(client: Client, message: Message):
             await db.add_user(user_id)
         except Exception:
             log.exception("Could not create/find user %s", user_id)
+
+        # Every user must choose a language before using the bot.
+        language = await db.get_language(user_id)
+        if not language:
+            from helper.i18n import t
+            await message.reply_text(
+                f"{t('en', 'select_title')}\\n\\n{t('en', 'select_prompt')}",
+                reply_markup=language_keyboard(),
+            )
+            return
 
         try:
             joined_count, missing_channels, failed_channels = await get_force_sub_status(client, user_id)
