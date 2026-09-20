@@ -72,7 +72,14 @@ class Bot(Client):
         recovered = await jobs.restore_from_db(self.bot_id)
         if not recovered:
             return
-        users = sorted({int(job.user_id) for job in recovered})
+        # Notify only users whose file is actually in the rename/processing
+        # stage and can be restarted. Jobs still waiting for an action/name
+        # must not receive an update message.
+        processing_jobs = [
+            job for job in recovered
+            if job.selected_action == "custom_name" and job.extra.get("name_submitted")
+        ]
+        users = sorted({int(job.user_id) for job in processing_jobs})
         for user_id in users:
             try:
                 await self.send_message(
@@ -82,9 +89,8 @@ class Bot(Client):
                 )
             except Exception:
                 pass
-        for job in recovered:
-            if job.selected_action != "custom_name" or not job.extra.get("name_submitted"):
-                continue
+
+        for job in processing_jobs:
             name = str(job.extra.get("submitted_name") or job.extra.get("auto_name") or "").strip()
             if name:
                 asyncio.create_task(self._resume_one_job(job, name))
