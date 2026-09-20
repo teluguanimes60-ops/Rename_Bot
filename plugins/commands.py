@@ -5,6 +5,7 @@ from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from helper.database import db
 from helper.i18n import t
+from language.strings import tr
 from plugins.ui import language_keyboard, thumbnail_menu, permanent_thumbnail_menu\nfrom language.strings import localize_markup
 
 
@@ -36,10 +37,10 @@ async def command_help(client, message):
 async def command_rename(client, message):
     lang = await _language(int(message.from_user.id))
     await message.reply_text(
-        f"✏️ **{t(lang, 'Rename Page')}**\n\n"
+        f"✏️ **{tr(lang, 'Rename Page')}**\n\n"
         "📤 Send me a video, document, or audio file.",
         reply_markup=InlineKeyboardMarkup([[
-            InlineKeyboardButton(f"🔙 {t(lang, 'Home')}", callback_data="start")
+            InlineKeyboardButton(f"🔙 {tr(lang, 'Home')}", callback_data="start")
         ]]),
     )
 
@@ -50,12 +51,12 @@ async def command_thumbnail(client, message):
     lang = await _language(user_id)
     has_thumbnail = bool(await db.get_thumbnail(user_id))
     await message.reply_text(
-        f"🖼 **{t(lang, 'Thumbnail Page')}**\n\nChoose your thumbnail mode.",
+        f"🖼 **{tr(lang, 'Thumbnail Page')}**\n\nChoose your thumbnail mode.",
         reply_markup=localize_markup(thumbnail_menu(), lang),
     )
     if has_thumbnail:
         await message.reply_text(
-            f"🖼 **{t(lang, 'Custom Thumbnail')}**\n\n"
+            f"🖼 **{tr(lang, 'Custom Thumbnail')}**\n\n"
             "Your saved thumbnail is available below.",
             reply_markup=localize_markup(permanent_thumbnail_menu(True), lang),
         )
