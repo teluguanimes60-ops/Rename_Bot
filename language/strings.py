@@ -56,3 +56,117 @@ STRINGS = {
 }
 
 LANGUAGE_CODES = tuple(STRINGS)
+
+# Extended UI translations used by command pages and localized buttons.
+EXTENDED_STRINGS = {
+    "en": {"Custom Thumbnail":"Custom Thumbnail","Add Thumbnail":"Add Thumbnail","Replace Thumbnail":"Replace Thumbnail","Show Thumbnail":"Show Thumbnail","Delete Custom":"Delete Custom","Plan":"Plan","Home":"Home","Choose a plan":"Choose a plan","Rename Page":"Rename Page","Thumbnail Page":"Thumbnail Page","Language Page":"Language Page"} ,
+    "ar": {"Custom Thumbnail":"صورة مصغرة مخصصة","Add Thumbnail":"إضافة صورة مصغرة","Replace Thumbnail":"استبدال الصورة المصغرة","Show Thumbnail":"عرض الصورة المصغرة","Delete Custom":"حذف المخصصة","Plan":"الخطة","Home":"الرئيسية","Choose a plan":"اختر خطة","Rename Page":"صفحة إعادة التسمية","Thumbnail Page":"صفحة الصورة المصغرة","Language Page":"صفحة اللغة"} ,
+    "hy": {"Custom Thumbnail":"Հատուկ մանրապատկեր","Add Thumbnail":"Ավելացնել մանրապատկեր","Replace Thumbnail":"Փոխարինել մանրապատկերը","Show Thumbnail":"Ցուցադրել մանրապատկերը","Delete Custom":"Ջնջել հատուկը","Plan":"Պլան","Home":"Գլխավոր","Choose a plan":"Ընտրեք պլան","Rename Page":"Վերանվանման էջ","Thumbnail Page":"Մանրապատկերի էջ","Language Page":"Լեզվի էջ"} ,
+    "az": {"Custom Thumbnail":"Xüsusi miniatür","Add Thumbnail":"Miniatür əlavə et","Replace Thumbnail":"Miniatürü dəyişdir","Show Thumbnail":"Miniatürü göstər","Delete Custom":"Xüsusini sil","Plan":"Plan","Home":"Ana səhifə","Choose a plan":"Plan seçin","Rename Page":"Ad dəyişdirmə səhifəsi","Thumbnail Page":"Miniatür səhifəsi","Language Page":"Dil səhifəsi"} ,
+    "bn": {"Custom Thumbnail":"কাস্টম থাম্বনেইল","Add Thumbnail":"থাম্বনেইল যোগ করুন","Replace Thumbnail":"থাম্বনেইল প্রতিস্থাপন করুন","Show Thumbnail":"থাম্বনেইল দেখান","Delete Custom":"কাস্টমটি মুছুন","Plan":"প্ল্যান","Home":"হোম","Choose a plan":"একটি প্ল্যান বেছে নিন","Rename Page":"নাম পরিবর্তন পৃষ্ঠা","Thumbnail Page":"থাম্বনেইল পৃষ্ঠা","Language Page":"ভাষা পৃষ্ঠা"} ,
+    "bg": {"Custom Thumbnail":"Персонализирана миниатюра","Add Thumbnail":"Добави миниатюра","Replace Thumbnail":"Замени миниатюрата","Show Thumbnail":"Покажи миниатюрата","Delete Custom":"Изтрий персонализираната","Plan":"План","Home":"Начало","Choose a plan":"Изберете план","Rename Page":"Страница за преименуване","Thumbnail Page":"Страница за миниатюра","Language Page":"Страница за език"} ,
+    "zh": {"Custom Thumbnail":"自定义缩略图","Add Thumbnail":"添加缩略图","Replace Thumbnail":"替换缩略图","Show Thumbnail":"显示缩略图","Delete Custom":"删除自定义缩略图","Plan":"套餐","Home":"主页","Choose a plan":"选择套餐","Rename Page":"重命名页面","Thumbnail Page":"缩略图页面","Language Page":"语言页面"} ,
+    "hr": {"Custom Thumbnail":"Prilagođena sličica","Add Thumbnail":"Dodaj sličicu","Replace Thumbnail":"Zamijeni sličicu","Show Thumbnail":"Prikaži sličicu","Delete Custom":"Obriši prilagođenu","Plan":"Plan","Home":"Početna","Choose a plan":"Odaberite plan","Rename Page":"Stranica za preimenovanje","Thumbnail Page":"Stranica sličice","Language Page":"Stranica jezika"} ,
+    "cs": {"Custom Thumbnail":"Vlastní náhled","Add Thumbnail":"Přidat náhled","Replace Thumbnail":"Nahradit náhled","Show Thumbnail":"Zobrazit náhled","Delete Custom":"Smazat vlastní","Plan":"Plán","Home":"Domů","Choose a plan":"Vyberte plán","Rename Page":"Stránka přejmenování","Thumbnail Page":"Stránka náhledu","Language Page":"Stránka jazyka"} ,
+    "da": {"Custom Thumbnail":"Brugerdefineret miniature","Add Thumbnail":"Tilføj miniature","Replace Thumbnail":"Erstat miniature","Show Thumbnail":"Vis miniature","Delete Custom":"Slet brugerdefineret","Plan":"Plan","Home":"Hjem","Choose a plan":"Vælg en plan","Rename Page":"Omdøbningsside","Thumbnail Page":"Miniatureside","Language Page":"Sprogside"} ,
+    "nl": {"Custom Thumbnail":"Aangepaste miniatuur","Add Thumbnail":"Miniatuur toevoegen","Replace Thumbnail":"Miniatuur vervangen","Show Thumbnail":"Miniatuur tonen","Delete Custom":"Aangepaste verwijderen","Plan":"Plan","Home":"Home","Choose a plan":"Kies een plan","Rename Page":"Hernoemingspagina","Thumbnail Page":"Miniatuurpagina","Language Page":"Taalpagina"} ,
+    "fi": {"Custom Thumbnail":"Mukautettu pikkukuva","Add Thumbnail":"Lisää pikkukuva","Replace Thumbnail":"Korvaa pikkukuva","Show Thumbnail":"Näytä pikkukuva","Delete Custom":"Poista mukautettu","Plan":"Paketti","Home":"Etusivu","Choose a plan":"Valitse paketti","Rename Page":"Uudelleennimeämissivu","Thumbnail Page":"Pikkukuvansivu","Language Page":"Kielisivu"} ,
+    "fr": {"Custom Thumbnail":"Miniature personnalisée","Add Thumbnail":"Ajouter une miniature","Replace Thumbnail":"Remplacer la miniature","Show Thumbnail":"Afficher la miniature","Delete Custom":"Supprimer la personnalisée","Plan":"Forfait","Home":"Accueil","Choose a plan":"Choisissez un forfait","Rename Page":"Page de renommage","Thumbnail Page":"Page miniature","Language Page":"Page de langue"} ,
+    "ka": {"Custom Thumbnail":"მორგებული ესკიზი","Add Thumbnail":"ესკიზის დამატება","Replace Thumbnail":"ესკიზის ჩანაცვლება","Show Thumbnail":"ესკიზის ჩვენება","Delete Custom":"მორგებულის წაშლა","Plan":"გეგმა","Home":"მთავარი","Choose a plan":"აირჩიეთ გეგმა","Rename Page":"გადარქმევის გვერდი","Thumbnail Page":"ესკიზის გვერდი","Language Page":"ენის გვერდი"} ,
+    "de": {"Custom Thumbnail":"Benutzerdefiniertes Vorschaubild","Add Thumbnail":"Vorschaubild hinzufügen","Replace Thumbnail":"Vorschaubild ersetzen","Show Thumbnail":"Vorschaubild anzeigen","Delete Custom":"Benutzerdefiniertes löschen","Plan":"Plan","Home":"Startseite","Choose a plan":"Wählen Sie einen Plan","Rename Page":"Umbenennungsseite","Thumbnail Page":"Vorschaubildseite","Language Page":"Sprachseite"} ,
+    "el": {"Custom Thumbnail":"Προσαρμοσμένη μικρογραφία","Add Thumbnail":"Προσθήκη μικρογραφίας","Replace Thumbnail":"Αντικατάσταση μικρογραφίας","Show Thumbnail":"Εμφάνιση μικρογραφίας","Delete Custom":"Διαγραφή προσαρμοσμένης","Plan":"Πλάνο","Home":"Αρχική","Choose a plan":"Επιλέξτε πλάνο","Rename Page":"Σελίδα μετονομασίας","Thumbnail Page":"Σελίδα μικρογραφίας","Language Page":"Σελίδα γλώσσας"} ,
+    "he": {"Custom Thumbnail":"תמונה ממוזערת מותאמת אישית","Add Thumbnail":"הוסף תמונה ממוזערת","Replace Thumbnail":"החלף תמונה ממוזערת","Show Thumbnail":"הצג תמונה ממוזערת","Delete Custom":"מחק מותאם אישית","Plan":"תוכנית","Home":"בית","Choose a plan":"בחר תוכנית","Rename Page":"דף שינוי שם","Thumbnail Page":"דף תמונה ממוזערת","Language Page":"דף שפה"} ,
+    "hi": {"Custom Thumbnail":"कस्टम थंबनेल","Add Thumbnail":"थंबनेल जोड़ें","Replace Thumbnail":"थंबनेल बदलें","Show Thumbnail":"थंबनेल दिखाएँ","Delete Custom":"कस्टम हटाएँ","Plan":"प्लान","Home":"होम","Choose a plan":"एक प्लान चुनें","Rename Page":"नाम बदलने का पेज","Thumbnail Page":"थंबनेल पेज","Language Page":"भाषा पेज"} ,
+    "hu": {"Custom Thumbnail":"Egyéni bélyegkép","Add Thumbnail":"Bélyegkép hozzáadása","Replace Thumbnail":"Bélyegkép cseréje","Show Thumbnail":"Bélyegkép megjelenítése","Delete Custom":"Egyéni törlése","Plan":"Csomag","Home":"Főoldal","Choose a plan":"Válasszon csomagot","Rename Page":"Átnevezési oldal","Thumbnail Page":"Bélyegkép oldal","Language Page":"Nyelvi oldal"} ,
+    "id": {"Custom Thumbnail":"Gambar mini kustom","Add Thumbnail":"Tambah gambar mini","Replace Thumbnail":"Ganti gambar mini","Show Thumbnail":"Tampilkan gambar mini","Delete Custom":"Hapus kustom","Plan":"Paket","Home":"Beranda","Choose a plan":"Pilih paket","Rename Page":"Halaman ganti nama","Thumbnail Page":"Halaman gambar mini","Language Page":"Halaman bahasa"} ,
+    "it": {"Custom Thumbnail":"Miniatura personalizzata","Add Thumbnail":"Aggiungi miniatura","Replace Thumbnail":"Sostituisci miniatura","Show Thumbnail":"Mostra miniatura","Delete Custom":"Elimina personalizzata","Plan":"Piano","Home":"Home","Choose a plan":"Scegli un piano","Rename Page":"Pagina rinomina","Thumbnail Page":"Pagina miniatura","Language Page":"Pagina lingua"} ,
+    "ja": {"Custom Thumbnail":"カスタムサムネイル","Add Thumbnail":"サムネイルを追加","Replace Thumbnail":"サムネイルを置換","Show Thumbnail":"サムネイルを表示","Delete Custom":"カスタムを削除","Plan":"プラン","Home":"ホーム","Choose a plan":"プランを選択","Rename Page":"名前変更ページ","Thumbnail Page":"サムネイルページ","Language Page":"言語ページ"} ,
+    "kk": {"Custom Thumbnail":"Арнайы нобай","Add Thumbnail":"Нобай қосу","Replace Thumbnail":"Нобайды ауыстыру","Show Thumbnail":"Нобайды көрсету","Delete Custom":"Арнайыны жою","Plan":"Жоспар","Home":"Басты бет","Choose a plan":"Жоспарды таңдаңыз","Rename Page":"Атын өзгерту беті","Thumbnail Page":"Нобай беті","Language Page":"Тіл беті"} ,
+    "ko": {"Custom Thumbnail":"사용자 지정 썸네일","Add Thumbnail":"썸네일 추가","Replace Thumbnail":"썸네일 교체","Show Thumbnail":"썸네일 보기","Delete Custom":"사용자 지정 삭제","Plan":"플랜","Home":"홈","Choose a plan":"플랜 선택","Rename Page":"이름 변경 페이지","Thumbnail Page":"썸네일 페이지","Language Page":"언어 페이지"} ,
+    "ms": {"Custom Thumbnail":"Lakaran kecil tersuai","Add Thumbnail":"Tambah lakaran kecil","Replace Thumbnail":"Ganti lakaran kecil","Show Thumbnail":"Tunjukkan lakaran kecil","Delete Custom":"Padam tersuai","Plan":"Pelan","Home":"Utama","Choose a plan":"Pilih pelan","Rename Page":"Halaman nama semula","Thumbnail Page":"Halaman lakaran kecil","Language Page":"Halaman bahasa"} ,
+    "ml": {"Custom Thumbnail":"ഇഷ്ടാനുസൃത ലഘുചിത്രം","Add Thumbnail":"ലഘുചിത്രം ചേർക്കുക","Replace Thumbnail":"ലഘുചിത്രം മാറ്റിസ്ഥാപിക്കുക","Show Thumbnail":"ലഘുചിത്രം കാണിക്കുക","Delete Custom":"ഇഷ്ടാനുസൃതം ഇല്ലാതാക്കുക","Plan":"പ്ലാൻ","Home":"ഹോം","Choose a plan":"ഒരു പ്ലാൻ തിരഞ്ഞെടുക്കുക","Rename Page":"പേര് മാറ്റൽ പേജ്","Thumbnail Page":"ലഘുചിത്ര പേജ്","Language Page":"ഭാഷാ പേജ്"} ,
+    "mr": {"Custom Thumbnail":"कस्टम थंबनेल","Add Thumbnail":"थंबनेल जोडा","Replace Thumbnail":"थंबनेल बदला","Show Thumbnail":"थंबनेल दाखवा","Delete Custom":"कस्टम हटवा","Plan":"प्लॅन","Home":"होम","Choose a plan":"प्लॅन निवडा","Rename Page":"नाव बदलण्याचे पृष्ठ","Thumbnail Page":"थंबनेल पृष्ठ","Language Page":"भाषा पृष्ठ"} ,
+    "ne": {"Custom Thumbnail":"अनुकूल थम्बनेल","Add Thumbnail":"थम्बनेल थप्नुहोस्","Replace Thumbnail":"थम्बनेल प्रतिस्थापन गर्नुहोस्","Show Thumbnail":"थम्बनेल देखाउनुहोस्","Delete Custom":"अनुकूल हटाउनुहोस्","Plan":"योजना","Home":"होम","Choose a plan":"योजना छान्नुहोस्","Rename Page":"नाम परिवर्तन पृष्ठ","Thumbnail Page":"थम्बनेल पृष्ठ","Language Page":"भाषा पृष्ठ"} ,
+    "no": {"Custom Thumbnail":"Egendefinert miniatyr","Add Thumbnail":"Legg til miniatyr","Replace Thumbnail":"Bytt miniatyr","Show Thumbnail":"Vis miniatyr","Delete Custom":"Slett egendefinert","Plan":"Plan","Home":"Hjem","Choose a plan":"Velg en plan","Rename Page":"Omdøpningsside","Thumbnail Page":"Miniatyrside","Language Page":"Språkside"} ,
+    "or": {"Custom Thumbnail":"କଷ୍ଟମ୍ ଥମ୍ବନେଲ୍","Add Thumbnail":"ଥମ୍ବନେଲ୍ ଯୋଡନ୍ତୁ","Replace Thumbnail":"ଥମ୍ବନେଲ୍ ବଦଳାନ୍ତୁ","Show Thumbnail":"ଥମ୍ବନେଲ୍ ଦେଖନ୍ତୁ","Delete Custom":"କଷ୍ଟମ୍ ଡିଲିଟ୍ କରନ୍ତୁ","Plan":"ଯୋଜନା","Home":"ମୁଖ୍ୟ","Choose a plan":"ଏକ ଯୋଜନା ବାଛନ୍ତୁ","Rename Page":"ନାମ ପରିବର୍ତ୍ତନ ପୃଷ୍ଠା","Thumbnail Page":"ଥମ୍ବନେଲ୍ ପୃଷ୍ଠା","Language Page":"ଭାଷା ପୃଷ୍ଠା"} ,
+    "fa": {"Custom Thumbnail":"تصویر بندانگشتی سفارشی","Add Thumbnail":"افزودن تصویر بندانگشتی","Replace Thumbnail":"جایگزینی تصویر بندانگشتی","Show Thumbnail":"نمایش تصویر بندانگشتی","Delete Custom":"حذف سفارشی","Plan":"طرح","Home":"خانه","Choose a plan":"یک طرح انتخاب کنید","Rename Page":"صفحه تغییر نام","Thumbnail Page":"صفحه تصویر بندانگشتی","Language Page":"صفحه زبان"} ,
+    "fil": {"Custom Thumbnail":"Custom na thumbnail","Add Thumbnail":"Magdagdag ng thumbnail","Replace Thumbnail":"Palitan ang thumbnail","Show Thumbnail":"Ipakita ang thumbnail","Delete Custom":"Tanggalin ang custom","Plan":"Plano","Home":"Home","Choose a plan":"Pumili ng plano","Rename Page":"Pahina ng pagpapalit ng pangalan","Thumbnail Page":"Pahina ng thumbnail","Language Page":"Pahina ng wika"} ,
+    "pl": {"Custom Thumbnail":"Niestandardowa miniatura","Add Thumbnail":"Dodaj miniaturę","Replace Thumbnail":"Zastąp miniaturę","Show Thumbnail":"Pokaż miniaturę","Delete Custom":"Usuń niestandardową","Plan":"Plan","Home":"Strona główna","Choose a plan":"Wybierz plan","Rename Page":"Strona zmiany nazwy","Thumbnail Page":"Strona miniatury","Language Page":"Strona języka"} ,
+    "pt": {"Custom Thumbnail":"Miniatura personalizada","Add Thumbnail":"Adicionar miniatura","Replace Thumbnail":"Substituir miniatura","Show Thumbnail":"Mostrar miniatura","Delete Custom":"Excluir personalizada","Plan":"Plano","Home":"Início","Choose a plan":"Escolha um plano","Rename Page":"Página de renomeação","Thumbnail Page":"Página de miniatura","Language Page":"Página de idioma"} ,
+    "pa": {"Custom Thumbnail":"ਕਸਟਮ ਥੰਬਨੇਲ","Add Thumbnail":"ਥੰਬਨੇਲ ਜੋੜੋ","Replace Thumbnail":"ਥੰਬਨੇਲ ਬਦਲੋ","Show Thumbnail":"ਥੰਬਨੇਲ ਦਿਖਾਓ","Delete Custom":"ਕਸਟਮ ਮਿਟਾਓ","Plan":"ਪਲਾਨ","Home":"ਹੋਮ","Choose a plan":"ਇੱਕ ਪਲਾਨ ਚੁਣੋ","Rename Page":"ਨਾਂ ਬਦਲਣ ਵਾਲਾ ਪੰਨਾ","Thumbnail Page":"ਥੰਬਨੇਲ ਪੰਨਾ","Language Page":"ਭਾਸ਼ਾ ਪੰਨਾ"} ,
+    "ro": {"Custom Thumbnail":"Miniatură personalizată","Add Thumbnail":"Adaugă miniatură","Replace Thumbnail":"Înlocuiește miniatura","Show Thumbnail":"Afișează miniatura","Delete Custom":"Șterge personalizata","Plan":"Plan","Home":"Acasă","Choose a plan":"Alege un plan","Rename Page":"Pagina de redenumire","Thumbnail Page":"Pagina miniaturii","Language Page":"Pagina limbii"} ,
+    "ru": {"Custom Thumbnail":"Пользовательская миниатюра","Add Thumbnail":"Добавить миниатюру","Replace Thumbnail":"Заменить миниатюру","Show Thumbnail":"Показать миниатюру","Delete Custom":"Удалить пользовательскую","Plan":"План","Home":"Главная","Choose a plan":"Выберите план","Rename Page":"Страница переименования","Thumbnail Page":"Страница миниатюры","Language Page":"Страница языка"} ,
+    "sr": {"Custom Thumbnail":"Прилагођена сличица","Add Thumbnail":"Додај сличицу","Replace Thumbnail":"Замени сличицу","Show Thumbnail":"Прикажи сличицу","Delete Custom":"Обриши прилагођену","Plan":"План","Home":"Почетна","Choose a plan":"Изаберите план","Rename Page":"Страница за преименовање","Thumbnail Page":"Страница сличице","Language Page":"Страница језика"} ,
+    "sk": {"Custom Thumbnail":"Vlastná miniatúra","Add Thumbnail":"Pridať miniatúru","Replace Thumbnail":"Nahradiť miniatúru","Show Thumbnail":"Zobraziť miniatúru","Delete Custom":"Odstrániť vlastnú","Plan":"Plán","Home":"Domov","Choose a plan":"Vyberte plán","Rename Page":"Stránka premenovania","Thumbnail Page":"Stránka miniatúry","Language Page":"Stránka jazyka"} ,
+    "sl": {"Custom Thumbnail":"Prilagojena sličica","Add Thumbnail":"Dodaj sličico","Replace Thumbnail":"Zamenjaj sličico","Show Thumbnail":"Prikaži sličico","Delete Custom":"Izbriši prilagojeno","Plan":"Načrt","Home":"Domov","Choose a plan":"Izberite načrt","Rename Page":"Stran za preimenovanje","Thumbnail Page":"Stran sličice","Language Page":"Stran jezika"} ,
+    "es": {"Custom Thumbnail":"Miniatura personalizada","Add Thumbnail":"Añadir miniatura","Replace Thumbnail":"Reemplazar miniatura","Show Thumbnail":"Mostrar miniatura","Delete Custom":"Eliminar personalizada","Plan":"Plan","Home":"Inicio","Choose a plan":"Elige un plan","Rename Page":"Página de renombrado","Thumbnail Page":"Página de miniatura","Language Page":"Página de idioma"} ,
+    "si": {"Custom Thumbnail":"අභිරුචි කුඩා රූපය","Add Thumbnail":"කුඩා රූපය එක් කරන්න","Replace Thumbnail":"කුඩා රූපය ප්‍රතිස්ථාපනය කරන්න","Show Thumbnail":"කුඩා රූපය පෙන්වන්න","Delete Custom":"අභිරුචිය මකන්න","Plan":"සැලැස්ම","Home":"මුල් පිටුව","Choose a plan":"සැලැස්මක් තෝරන්න","Rename Page":"නම වෙනස් කිරීමේ පිටුව","Thumbnail Page":"කුඩා රූප පිටුව","Language Page":"භාෂා පිටුව"} ,
+    "sv": {"Custom Thumbnail":"Anpassad miniatyr","Add Thumbnail":"Lägg till miniatyr","Replace Thumbnail":"Ersätt miniatyr","Show Thumbnail":"Visa miniatyr","Delete Custom":"Ta bort anpassad","Plan":"Plan","Home":"Hem","Choose a plan":"Välj en plan","Rename Page":"Sida för namnbyte","Thumbnail Page":"Miniatyrsida","Language Page":"Språksida"} ,
+    "th": {"Custom Thumbnail":"ภาพขนาดย่อกำหนดเอง","Add Thumbnail":"เพิ่มภาพขนาดย่อ","Replace Thumbnail":"แทนที่ภาพขนาดย่อ","Show Thumbnail":"แสดงภาพขนาดย่อ","Delete Custom":"ลบแบบกำหนดเอง","Plan":"แพ็กเกจ","Home":"หน้าหลัก","Choose a plan":"เลือกแพ็กเกจ","Rename Page":"หน้าการเปลี่ยนชื่อ","Thumbnail Page":"หน้าภาพขนาดย่อ","Language Page":"หน้าภาษา"} ,
+    "ta": {"Custom Thumbnail":"தனிப்பயன் சிறுபடம்","Add Thumbnail":"சிறுபடத்தைச் சேர்","Replace Thumbnail":"சிறுபடத்தை மாற்று","Show Thumbnail":"சிறுபடத்தைக் காட்டு","Delete Custom":"தனிப்பயனை நீக்கு","Plan":"திட்டம்","Home":"முகப்பு","Choose a plan":"ஒரு திட்டத்தைத் தேர்ந்தெடுக்கவும்","Rename Page":"மறுபெயரிடும் பக்கம்","Thumbnail Page":"சிறுபடப் பக்கம்","Language Page":"மொழிப் பக்கம்"} ,
+    "te": {"Custom Thumbnail":"కస్టమ్ థంబ్‌నెయిల్","Add Thumbnail":"థంబ్‌నెయిల్ జోడించు","Replace Thumbnail":"థంబ్‌నెయిల్ మార్చు","Show Thumbnail":"థంబ్‌నెయిల్ చూపించు","Delete Custom":"కస్టమ్ తొలగించు","Plan":"ప్లాన్","Home":"హోమ్","Choose a plan":"ఒక ప్లాన్ ఎంచుకోండి","Rename Page":"పేరు మార్చే పేజీ","Thumbnail Page":"థంబ్‌నెయిల్ పేజీ","Language Page":"భాష పేజీ"} ,
+    "tr": {"Custom Thumbnail":"Özel küçük resim","Add Thumbnail":"Küçük resim ekle","Replace Thumbnail":"Küçük resmi değiştir","Show Thumbnail":"Küçük resmi göster","Delete Custom":"Özeli sil","Plan":"Plan","Home":"Ana Sayfa","Choose a plan":"Bir plan seçin","Rename Page":"Yeniden adlandırma sayfası","Thumbnail Page":"Küçük resim sayfası","Language Page":"Dil sayfası"} ,
+    "uk": {"Custom Thumbnail":"Власна мініатюра","Add Thumbnail":"Додати мініатюру","Replace Thumbnail":"Замінити мініатюру","Show Thumbnail":"Показати мініатюру","Delete Custom":"Видалити власну","Plan":"План","Home":"Головна","Choose a plan":"Оберіть план","Rename Page":"Сторінка перейменування","Thumbnail Page":"Сторінка мініатюри","Language Page":"Сторінка мови"} ,
+    "ur": {"Custom Thumbnail":"حسب ضرورت تھمب نیل","Add Thumbnail":"تھمب نیل شامل کریں","Replace Thumbnail":"تھمب نیل تبدیل کریں","Show Thumbnail":"تھمب نیل دکھائیں","Delete Custom":"حسب ضرورت حذف کریں","Plan":"پلان","Home":"ہوم","Choose a plan":"ایک پلان منتخب کریں","Rename Page":"نام تبدیل کرنے کا صفحہ","Thumbnail Page":"تھمب نیل صفحہ","Language Page":"زبان کا صفحہ"} ,
+    "uz": {"Custom Thumbnail":"Maxsus eskiz","Add Thumbnail":"Eskiz qo‘shish","Replace Thumbnail":"Eskizni almashtirish","Show Thumbnail":"Eskizni ko‘rsatish","Delete Custom":"Maxsusni o‘chirish","Plan":"Reja","Home":"Bosh sahifa","Choose a plan":"Rejani tanlang","Rename Page":"Nomini o‘zgartirish sahifasi","Thumbnail Page":"Eskiz sahifasi","Language Page":"Til sahifasi"} ,
+    "vi": {"Custom Thumbnail":"Ảnh thu nhỏ tùy chỉnh","Add Thumbnail":"Thêm ảnh thu nhỏ","Replace Thumbnail":"Thay ảnh thu nhỏ","Show Thumbnail":"Hiển thị ảnh thu nhỏ","Delete Custom":"Xóa ảnh tùy chỉnh","Plan":"Gói","Home":"Trang chủ","Choose a plan":"Chọn một gói","Rename Page":"Trang đổi tên","Thumbnail Page":"Trang ảnh thu nhỏ","Language Page":"Trang ngôn ngữ"} ,
+}
+
+
+def tr(lang: str | None, key: str) -> str:
+    code = str(lang or "en").lower()
+    data = EXTENDED_STRINGS.get(code) or EXTENDED_STRINGS["en"]
+    if key == "Custom Thumbnail" and key not in data:
+        return STRINGS.get(code, STRINGS["en"]).get("Permanent Thumbnail", key)
+    return data.get(key) or STRINGS.get(code, STRINGS["en"]).get(key) or key
+
+
+def localize_markup(markup, lang: str | None):
+    """Return a copy of an inline keyboard with all known UI labels localized."""
+    if markup is None:
+        return None
+    from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+    rows = []
+    for row in getattr(markup, "inline_keyboard", []) or []:
+        new_row = []
+        for button in row:
+            text = getattr(button, "text", "") or ""
+            clean = text
+            if clean.startswith("🖼 Permanent Thumbnail") or clean.startswith("🖼 Custom Thumbnail"):
+                localized = tr(lang, "Custom Thumbnail")
+                clean = "🖼 " + localized
+            elif clean.startswith("➕ Add Thumbnail"):
+                clean = "➕ " + tr(lang, "Add Thumbnail")
+            elif clean.startswith("🔄 Replace Thumbnail"):
+                clean = "🔄 " + tr(lang, "Replace Thumbnail")
+            elif clean.startswith("👁 Show Thumbnail"):
+                clean = "👁 " + tr(lang, "Show Thumbnail")
+            elif clean.startswith("🗑 Delete Custom"):
+                clean = "🗑 " + tr(lang, "Delete Custom")
+            elif clean.startswith("💎 Plan"):
+                clean = "💎 " + tr(lang, "Plan")
+            elif clean.startswith("🔙 Back"):
+                clean = "🔙 " + tr(lang, "Back")
+            elif clean.startswith("🔙 Settings"):
+                clean = "🔙 " + tr(lang, "Settings")
+            elif clean.startswith("🛠 Help"):
+                clean = "🛠 " + tr(lang, "Help")
+            elif clean.startswith("⚙️ Settings"):
+                clean = "⚙️ " + tr(lang, "Settings")
+            elif clean.startswith("✏️ Rename"):
+                clean = "✏️ " + tr(lang, "Rename")
+            elif clean.startswith("❌ Cancel"):
+                clean = "❌ " + tr(lang, "Cancel")
+            elif clean.startswith("✅ Confirm"):
+                clean = "✅ " + tr(lang, "Confirm")
+            elif clean.startswith("🚫 No Thumbnail"):
+                clean = "🚫 " + tr(lang, "No Thumbnail")
+            elif clean.startswith("🤖 Auto Thumbnail"):
+                clean = "🤖 " + tr(lang, "Auto Thumbnail")
+            elif clean.startswith("🌐 Language"):
+                clean = "🌐 " + tr(lang, "Language")
+            elif clean.startswith("🏷 Metadata"):
+                clean = "🏷 " + tr(lang, "Metadata")
+            new_row.append(InlineKeyboardButton(clean, callback_data=getattr(button,"callback_data",None), url=getattr(button,"url",None), web_app=getattr(button,"web_app",None), login_url=getattr(button,"login_url",None), switch_inline_query=getattr(button,"switch_inline_query",None), switch_inline_query_current_chat=getattr(button,"switch_inline_query_current_chat",None), callback_game=getattr(button,"callback_game",None), pay=getattr(button,"pay",False)))
+        rows.append(new_row)
+    return InlineKeyboardMarkup(rows)
