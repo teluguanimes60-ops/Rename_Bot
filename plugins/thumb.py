@@ -144,42 +144,6 @@ async def set_thumbnail_command(
     )
 
 
-@Client.on_message(
-    filters.private
-    & filters.command(
-        ["viewthumb", "view_thumb", "showthumb"]
-    )
-)
-async def view_thumbnail(
-    client: Client,
-    message: Message,
-):
-    """
-    Displays the user's currently saved thumbnail.
-    """
-
-    user_id = message.from_user.id
-
-    thumb = await db.get_thumbnail(
-        user_id
-    )
-
-    if thumb:
-        await message.reply_photo(
-            photo=thumb,
-            caption=(
-                "🖼️ **Your Current Custom Thumbnail**\n\n"
-                "Use `/delthumb` to remove it."
-            ),
-        )
-
-    else:
-        await message.reply_text(
-            "❌ **No Custom Thumbnail Set**\n\n"
-            "Send me any image to save it as your permanent thumbnail."
-        )
-
-
 # ============================================================
 # DELETE THUMBNAIL
 # ============================================================
