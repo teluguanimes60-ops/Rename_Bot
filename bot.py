@@ -8,6 +8,7 @@ from pyrogram.types import BotCommand
 from config import Config
 from helper.clone_manager import CloneManager
 from helper.message_cleanup import install_auto_cleanup
+from helper.job_state import jobs
 import helper.auto_queue  # noqa: F401
 
 logging.basicConfig(
@@ -64,6 +65,38 @@ class Bot(Client):
         except Exception:
             log.exception("Could not update Telegram bot commands")
 
+
+    async def _recover_jobs(self):
+        recovered = await jobs.restore_from_db(self.bot_id)
+        if not recovered:
+            return
+        users = sorted({int(job.user_id) for job in recovered})
+        for user_id in users:
+            try:
+                await self.send_message(user_id, "🔄 **AniToon Bot is updating...**\n\nYour file is safely queued. Please wait — incomplete downloads will continue automatically.")
+                await self.send_message(user_id, "✅ **Bot update completed.**\n\nYour queued file processing is continuing automatically.")
+            except Exception:
+                pass
+        for job in recovered:
+            if job.selected_action != "custom_name" or not job.extra.get("name_submitted"):
+                continue
+            name = str(job.extra.get("submitted_name") or job.extra.get("auto_name") or "").strip()
+            if name:
+                asyncio.create_task(self._resume_one_job(job, name))
+
+    async def _resume_one_job(self, job, name: str):
+        from plugins.rename_reply_responder import process_custom_name_job
+        try:
+            source = None
+            if job.source_message_id:
+                try: source = await self.get_messages(job.user_id, job.source_message_id)
+                except Exception: source = None
+            if source is None:
+                source = await self.send_message(job.user_id, "🔄 **Resuming your file...**")
+            await process_custom_name_job(self, source, job, name)
+        except Exception:
+            log.exception("Could not resume job %s", job.job_id)
+
     async def start(self):
         while True:
             try:
@@ -75,6 +108,7 @@ class Bot(Client):
                 log.info("Main bot started: @%s (ID: %s)", me.username or "unknown", me.id)
                 log.info("Telegram transfer concurrency: %s", Config.MAX_CONCURRENT_TRANSMISSIONS)
                 await self._setup_commands()
+                await self._recover_jobs()
                 if Config.IS_CLONE_ALLOWED:
                     self.clone_manager = CloneManager(self)
                     await self.clone_manager.start_all()
