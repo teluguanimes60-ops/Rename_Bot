@@ -18,8 +18,6 @@ def settings_markup():
         [InlineKeyboardButton("✏️ Manual", callback_data="rename_mode:manual")],
         [InlineKeyboardButton("🤖 Auto Rename", callback_data="rename_mode:auto")],
         [InlineKeyboardButton("🏷 Permanent Text", callback_data="rename_mode:permanent")],
-        [InlineKeyboardButton("📝 Set Permanent Text", callback_data="rename_template")],
-        [InlineKeyboardButton("🗑 Clear Permanent Text", callback_data="rename_template_clear")],
         [InlineKeyboardButton("🔙 Settings", callback_data="settings")],
     ])
 
@@ -88,15 +86,24 @@ async def rename_mode_button(client, cb):
     mode = cb.matches[0].group(1)
     user_id = int(cb.from_user.id)
 
-    if mode == "permanent" and not await db.get_rename_template(user_id):
-        await db.set_rename_mode(user_id, "permanent")
-        await cb.answer("Set a permanent text first.", show_alert=True)
+    if mode == "permanent":
+        await cb.answer("Set your permanent message.", show_alert=True)
         prompt = await client.send_message(
             user_id,
-            "🏷 **Permanent Rename Text**\n\n"
-            "Send a template such as:\n"
-            "\`{name} - Telugu Anime\`\n\n"
-            "Available: \`{name}\`, \`{filename}\`, \`{ext}\`, \`{title}\`, \`{season}\`, \`{episode}\`, \`{year}\`, \`{resolution}\`, \`{language}\`",
+            "🏷 **Set Your Permanent Rename Message**\\n\\n"
+            "Send the permanent message/text you want to add to every renamed file.\\n\\n"
+            "Example:\\n"
+            "\\`{name} - Telugu Anime\\`\\n\\n"
+            "**Available placeholders:**\\n"
+            "\\`{name}\\` — original filename without extension\\n"
+            "\\`{filename}\\` — original full filename\\n"
+            "\\`{ext}\\` — original extension\\n"
+            "\\`{title}\\` — cleaned title\\n"
+            "\\`{season}\\` — detected season\\n"
+            "\\`{episode}\\` — detected episode\\n"
+            "\\`{year}\\` — detected year\\n"
+            "\\`{resolution}\\` — detected resolution\\n"
+            "\\`{language}\\` — detected language",
             reply_markup=ForceReply(selective=True),
         )
         await db.col.update_one(
@@ -107,8 +114,7 @@ async def rename_mode_button(client, cb):
         raise StopPropagation
 
     await db.set_rename_mode(user_id, mode)
-    await cb.answer("Rename mode updated ✅", show_alert=True)
-    await edit_callback_message(
+    await cb.answer("Rename mode updated ✅", show_alert=True)    await edit_callback_message(
         cb,
         await page_text(user_id),
         reply_markup=settings_markup(),
@@ -132,20 +138,6 @@ async def rename_template_button(client, cb):
         {"id": int(cb.from_user.id)},
         {"$set": {"rename_template_prompt": prompt.id}},
         upsert=True,
-    )
-    raise StopPropagation
-
-
-@Client.on_callback_query(filters.regex(r"^rename_template_clear$"), group=-2900)
-async def rename_template_clear(client, cb):
-    await db.set_rename_template(cb.from_user.id, "")
-    if await db.get_rename_mode(cb.from_user.id) == "permanent":
-        await db.set_rename_mode(cb.from_user.id, "manual")
-    await cb.answer("Permanent text cleared. Manual mode restored ✅", show_alert=True)
-    await edit_callback_message(
-        cb,
-        await page_text(cb.from_user.id),
-        reply_markup=settings_markup(),
     )
     raise StopPropagation
 
