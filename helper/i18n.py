@@ -107,3 +107,55 @@ def t(lang: str | None, key: str) -> str:
 def language_label(code: str | None) -> str:
     info = language_info(code)
     return f"{info['flag']} {info['name']}"
+
+
+# Runtime localization cache and helpers.
+_LANGUAGE_CACHE: dict[int, str] = {}
+
+
+def remember_language(user_id: int, language: str | None) -> None:
+    value = str(language or "").strip().lower()
+    if value and is_valid_language(value):
+        _LANGUAGE_CACHE[int(user_id)] = value
+    else:
+        _LANGUAGE_CACHE.pop(int(user_id), None)
+
+
+async def user_language(user_id: int) -> str:
+    uid = int(user_id)
+    cached = _LANGUAGE_CACHE.get(uid)
+    if cached:
+        return cached
+    try:
+        from helper.database import db
+        value = await db.get_language(uid)
+    except Exception:
+        value = None
+    language = value if is_valid_language(value) else DEFAULT_LANGUAGE
+    _LANGUAGE_CACHE[uid] = language
+    return language
+
+
+def localize_text(lang: str | None, text):
+    """Translate known bot UI phrases while preserving filenames, user input and values."""
+    if not isinstance(text, str) or not text:
+        return text
+    code = str(lang or DEFAULT_LANGUAGE).lower()
+    if not is_valid_language(code) or code == DEFAULT_LANGUAGE:
+        return text
+
+    try:
+        from language.strings import STRINGS, EXTENDED_STRINGS
+        catalog = {}
+        catalog.update(STRINGS.get(code, {}))
+        catalog.update(EXTENDED_STRINGS.get(code, {}))
+        # Longest phrases first prevents partial replacements from corrupting
+        # larger translated sentences.
+        for source in sorted(catalog, key=len, reverse=True):
+            target = catalog.get(source)
+            if not source or not target or source == target:
+                continue
+            text = text.replace(source, target)
+    except Exception:
+        pass
+    return text
