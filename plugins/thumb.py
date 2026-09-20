@@ -148,30 +148,3 @@ async def set_thumbnail_command(
 # DELETE THUMBNAIL
 # ============================================================
 
-@Client.on_message(
-    filters.private
-    & filters.command(
-        ["delthumb", "del_thumb", "deletethumb"]
-    )
-)
-async def delete_thumbnail(
-    client: Client,
-    message: Message,
-):
-    """
-    Removes the user's saved thumbnail.
-    """
-
-    user_id = message.from_user.id
-
-    await db.set_thumbnail(
-        user_id,
-        None,
-    )
-    await db.set_thumbnail_mode(user_id, "none")
-
-    await message.reply_text(
-        "🗑️ **Custom Thumbnail Deleted.**\n\n"
-        "Your files will now use automatically generated "
-        "or original thumbnails."
-    )
