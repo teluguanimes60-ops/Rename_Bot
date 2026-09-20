@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import os
 import shutil
+import time
 
 from pyrogram import Client, StopPropagation, filters
 from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
@@ -168,6 +169,17 @@ async def process_custom_name_job(client, message, job, name: str):
         int((job.extra or {}).get("telegram_file_size", 0) or 0),
     )
     try:
+        # Always expose the download stage from 0% before Telegram starts
+        # transferring bytes. There is no artificial sleep/delay here.
+        expected_size = int((job.extra or {}).get("telegram_file_size", 0) or 0)
+        await progress_for_pyrogram(
+            0,
+            expected_size,
+            "Downloading",
+            status,
+            time.time(),
+            job.job_id,
+        )
         await _log_rename_activity(job, safe_name)
         await _download_source(client, message, job, status)
 
