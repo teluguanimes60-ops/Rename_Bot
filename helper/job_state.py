@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from config import Config
+from helper.database import db
 
 
 @dataclass
@@ -38,12 +39,40 @@ class JobManager:
         self._user_jobs: dict[int, list[str]] = {}
         self._lock = asyncio.Lock()
 
+    @staticmethod
+    def _persist_extra(extra: dict[str, Any]) -> dict[str, Any]:
+        allowed = {}
+        for key, value in (extra or {}).items():
+            if key in {"source_message", "user_data"}:
+                continue
+            if isinstance(value, (str, int, float, bool)) or value is None:
+                allowed[key] = value
+            elif isinstance(value, dict):
+                allowed[key] = JobManager._persist_extra(value)
+            elif isinstance(value, list):
+                allowed[key] = [v for v in value if isinstance(v, (str, int, float, bool)) or v is None]
+        return allowed
+
+    def _record(self, job: Job) -> dict[str, Any]:
+        extra = self._persist_extra(job.extra)
+        return {
+            "job_id": job.job_id, "user_id": int(job.user_id), "bot_id": int(job.bot_id),
+            "source_message_id": int(job.source_message_id), "work_dir": job.work_dir,
+            "input_path": job.input_path, "original_name": job.original_name,
+            "mime_type": job.mime_type, "detected_name": job.detected_name,
+            "selected_action": job.selected_action, "output_ext": job.output_ext,
+            "active": bool(job.active), "queued_at": float(job.queued_at),
+            "created_at": float(job.created_at), "extra": extra,
+            "state": str(extra.get("state") or ("processing" if extra.get("processing") else "queued")),
+        }
+
     async def register(self, job: Job) -> bool:
         async with self._lock:
             user_id = int(job.user_id)
             self._jobs[job.job_id] = job
             self._user_jobs.setdefault(user_id, []).append(job.job_id)
             self._user_locks.setdefault(user_id, asyncio.Lock())
+            await db.save_job(self._record(job))
             return True
 
     async def get(self, job_id: str) -> Job | None:
@@ -75,6 +104,7 @@ class JobManager:
                 return None
             for key, value in values.items():
                 setattr(job, key, value)
+            await db.save_job(self._record(job))
             return job
 
     async def remove(self, job_id: str) -> None:
@@ -92,6 +122,34 @@ class JobManager:
             else:
                 self._user_jobs.pop(job.user_id, None)
                 self._user_locks.pop(job.user_id, None)
+            await db.delete_job(job_id)
+
+    async def restore_from_db(self, bot_id: int) -> list[Job]:
+        records = await db.get_pending_jobs(int(bot_id))
+        restored = []
+        async with self._lock:
+            for item in records:
+                job = Job(
+                    job_id=str(item["job_id"]), user_id=int(item["user_id"]), bot_id=int(item["bot_id"]),
+                    source_message_id=int(item.get("source_message_id", 0) or 0),
+                    work_dir=str(item.get("work_dir") or ""), input_path=str(item.get("input_path") or ""),
+                    original_name=str(item.get("original_name") or "file"), mime_type=item.get("mime_type"),
+                    detected_name=item.get("detected_name"), selected_action=item.get("selected_action"),
+                    output_ext=item.get("output_ext"), active=bool(item.get("active", True)),
+                    queued_at=float(item.get("queued_at", time.time())), created_at=float(item.get("created_at", time.time())),
+                    extra=dict(item.get("extra") or {}),
+                )
+                job.extra.pop("source_message", None)
+                job.extra.pop("user_data", None)
+                job.extra["processing"] = False
+                job.extra["state"] = "queued"
+                self._jobs[job.job_id] = job
+                self._user_jobs.setdefault(job.user_id, []).append(job.job_id)
+                self._user_locks.setdefault(job.user_id, asyncio.Lock())
+                restored.append(job)
+            for ids in self._user_jobs.values():
+                ids.sort(key=lambda jid: self._jobs[jid].queued_at)
+        return sorted(restored, key=lambda item: item.queued_at)
 
     async def position(self, job_id: str) -> int:
         async with self._lock:
