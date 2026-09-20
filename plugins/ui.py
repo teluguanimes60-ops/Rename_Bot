@@ -99,6 +99,13 @@ def advanced_menu(job_id: str):
 
 async def edit_callback_message(callback_query, text, reply_markup=None):
     message = callback_query.message
+    try:
+        from helper.database import db
+        from language.strings import localize_markup
+        lang = await db.get_language(int(callback_query.from_user.id)) or "en"
+        reply_markup = localize_markup(reply_markup, lang)
+    except Exception:
+        pass
     try: return await message.edit_text(text, reply_markup=reply_markup)
     except Exception: pass
     try: return await message.edit_caption(caption=text, reply_markup=reply_markup)
