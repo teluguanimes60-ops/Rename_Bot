@@ -96,7 +96,7 @@ async def rename_mode_button(client, cb):
             "🏷 **Permanent Rename Text**\n\n"
             "Send a template such as:\n"
             "\`{name} - Telugu Anime\`\n\n"
-            "Available: \`{name}\`, \`{filename}\`, \`{ext}\`",
+            "Available: \`{name}\`, \`{filename}\`, \`{ext}\`, \`{title}\`, \`{season}\`, \`{episode}\`, \`{year}\`, \`{resolution}\`, \`{language}\`",
             reply_markup=ForceReply(selective=True),
         )
         await db.col.update_one(
@@ -125,7 +125,7 @@ async def rename_template_button(client, cb):
         "Send a template such as:\n"
         "\`{name} - Telugu Anime\`\n"
         "\`[AniToon] {name}\`\n\n"
-        "Available: \`{name}\`, \`{filename}\`, \`{ext}\`",
+        "Available: \`{name}\`, \`{filename}\`, \`{ext}\`, \`{title}\`, \`{season}\`, \`{episode}\`, \`{year}\`, \`{resolution}\`, \`{language}\`",
         reply_markup=ForceReply(selective=True),
     )
     await db.col.update_one(
