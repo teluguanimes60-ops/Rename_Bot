@@ -14,7 +14,7 @@ from helper.database import db
 async def cb_del_caption(
     client: Client,
     callback_query,
-)
+):
     await db.set_caption(
         callback_query.from_user.id,
         None,
@@ -53,7 +53,7 @@ async def cb_del_caption(
 async def cb_help_caption(
     client: Client,
     callback_query,
-)
+):
     await callback_query.answer()
 
     from plugins.ui import edit_callback_message
