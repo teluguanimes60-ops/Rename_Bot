@@ -19,6 +19,7 @@ class Database:
         self.payments = self.db.payments
         self.clones = self.db.clones
         self.force_sub_requests = self.db.force_sub_requests
+        self.jobs = self.db.jobs
 
     @staticmethod
     def new_user(user_id: int) -> dict:
@@ -166,6 +167,15 @@ class Database:
             return False
         await self.payments.insert_one({"user_id": int(user_id), "bot_id": int(bot_id), "plan": plan_key, "stars": int(stars), "charge_id": charge_id, "created_at": datetime.utcnow()})
         return True
+    async def save_job(self, job_data: dict):
+        await self.jobs.update_one({"job_id": str(job_data["job_id"])}, {"$set": dict(job_data)}, upsert=True)
+
+    async def delete_job(self, job_id: str):
+        await self.jobs.delete_one({"job_id": str(job_id)})
+
+    async def get_pending_jobs(self, bot_id: int):
+        cursor = self.jobs.find({"bot_id": int(bot_id), "state": {"$nin": ["completed", "cancelled"]}})
+        return [item async for item in cursor]
 
     async def add_clone(self, owner_id: int, bot_id: int, bot_username: str | None, bot_name: str | None, bot_token: str):
         now = datetime.utcnow()
