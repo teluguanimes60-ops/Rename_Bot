@@ -236,12 +236,9 @@ async def repaired_file_download(client: Client, message: Message):
         await message.reply_text("❌ Could not add this file to the queue.")
         raise StopPropagation
     try:
-        all_jobs = await jobs.get_user_jobs(user_id)
-        queue_position = len(all_jobs)
-        queue_text = f"\n\n📋 **Queue position:** `#{queue_position}`" if queue_position > 1 else ""
         runtime_text = f"\n🎬 **Runtime:** `{duration // 60}m {duration % 60}s`" if duration else ""
         file_type = _display_file_type(original_name, media, mime_type)
-        status = await message.reply_text("📂 **File Information**\n\n" f"📄 **Name:** `{original_name}`\n" f"📦 **Size:** `{humanbytes(expected_size)}`\n" f"🎞 **Type:** `{file_type}`" + runtime_text + queue_text + "\n\nChoose an operation:", reply_markup=file_action_menu(job_id))
+        status = await message.reply_text("📂 **File Information**\n\n" f"📄 **Name:** `{original_name}`\n" f"📦 **Size:** `{humanbytes(expected_size)}`\n" f"🎞 **Type:** `{file_type}`" + runtime_text + "\n\nChoose an operation:", reply_markup=file_action_menu(job_id))
         await jobs.update(job_id, extra={**job.extra, "status_message_id": status.id})
     except Exception:
         shutil.rmtree(work_dir, ignore_errors=True)
