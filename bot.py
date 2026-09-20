@@ -1,5 +1,7 @@
 import asyncio
 import logging
+import os
+import shutil
 
 from pyrogram import Client
 from pyrogram.errors import FloodWait
@@ -73,8 +75,11 @@ class Bot(Client):
         users = sorted({int(job.user_id) for job in recovered})
         for user_id in users:
             try:
-                await self.send_message(user_id, "🔄 **AniToon Bot is updating...**\n\nYour file is safely queued. Please wait — incomplete downloads will continue automatically.")
-                await self.send_message(user_id, "✅ **Bot update completed.**\n\nYour queued file processing is continuing automatically.")
+                await self.send_message(
+                    user_id,
+                    "🔄 **AniToon Bot is updating...**\n\n"
+                    "Please wait. Your file will start again automatically from the beginning after the update."
+                )
             except Exception:
                 pass
         for job in recovered:
@@ -87,12 +92,22 @@ class Bot(Client):
     async def _resume_one_job(self, job, name: str):
         from plugins.rename_reply_responder import process_custom_name_job
         try:
+            # A deployment must restart the unfinished job from the beginning.
+            # Remove any partial local download/output so the next transfer
+            # starts from the original Telegram file again.
+            shutil.rmtree(job.work_dir, ignore_errors=True)
+            os.makedirs(job.work_dir, exist_ok=True)
+
             source = None
             if job.source_message_id:
-                try: source = await self.get_messages(job.user_id, job.source_message_id)
-                except Exception: source = None
+                try:
+                    source = await self.get_messages(job.user_id, job.source_message_id)
+                except Exception:
+                    source = None
             if source is None:
-                source = await self.send_message(job.user_id, "🔄 **Resuming your file...**")
+                log.error("Original source message %s not found for job %s", job.source_message_id, job.job_id)
+                return
+
             await process_custom_name_job(self, source, job, name)
         except Exception:
             log.exception("Could not resume job %s", job.job_id)
