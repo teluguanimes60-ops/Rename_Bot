@@ -115,11 +115,11 @@ async def _apply_user_metadata(job: Job, path: str) -> str:
         return path
 
 
-async def _send_plain_output(client: Client, job: Job, path: str, filename: str, status: Message | None = None):
+async def _send_plain_output(client: Client, job: Job, path: str, filename: str, status: Message | None = None, *, force_document: bool = False):
     if not os.path.isfile(path) or os.path.getsize(path) <= 0:
         raise RuntimeError("Processed output is missing or empty")
     ext, mime = _extension(filename), job.mime_type or ""
-    if ext == "mp4" or mime == "video/mp4":
+    if not force_document and (ext == "mp4" or mime == "video/mp4"):
         return await _send_video(client, job, path, filename, status)
     await _show_upload_start(status, filename)
     result = await upload_job(client, job, path, filename, status, as_video=False)
@@ -130,15 +130,19 @@ async def _send_plain_output(client: Client, job: Job, path: str, filename: str,
 
 async def _deliver_output(client: Client, job: Job, path: str, filename: str, status: Message | None = None, *, prepared_video: bool = False):
     path = await _apply_user_metadata(job, path)
-    if _extension(filename) == "mp4" or (job.mime_type or "") == "video/mp4":
+    output_mode = str((job.extra or {}).get("rename_output_mode") or "").lower()
+
+    # "file" means a Telegram document even when the source is an MP4.
+    # "video" means native Telegram video when the resulting file is a video.
+    if output_mode != "file" and (_extension(filename) == "mp4" or (job.mime_type or "") == "video/mp4"):
         if is_large_video(path):
             parts = await split_video_for_telegram(path, job.work_dir, filename)
             return [await _send_video(client, job, part, os.path.basename(part), status) for part in parts]
         return [await _send_video(client, job, path, filename, status, prepared_video=prepared_video)]
     parts = await split_file_for_telegram(path, job.work_dir, filename)
     if len(parts) > 1:
-        return [await _send_plain_output(client, job, part, os.path.basename(part), status) for part in parts]
-    return [await _send_plain_output(client, job, path, filename, status)]
+        return [await _send_plain_output(client, job, part, os.path.basename(part), status, force_document=(output_mode == "file")) for part in parts]
+    return [await _send_plain_output(client, job, path, filename, status, force_document=(output_mode == "file"))]
 
 
 @Client.on_message(filters.private & (filters.document | filters.video | filters.audio), group=-10000)
