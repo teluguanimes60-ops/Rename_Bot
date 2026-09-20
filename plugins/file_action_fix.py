@@ -9,10 +9,11 @@ from pyrogram.types import Message
 
 from helper.archive_result import archive_message
 from helper.database import db
-from helper.ffmpeg import get_video_info, prepare_video_for_telegram
+from helper.ffmpeg import get_video_info
 from helper.job_transfer import upload_job
 from helper.large_file import split_file_for_telegram
 from helper.large_video import is_large_video, split_video_for_telegram
+from helper.metadata import apply_metadata_to_media, get_metadata
 from helper.job_state import Job, jobs
 from helper.message_cleanup import protect_message, protect_result
 from helper.utils import humanbytes, reset_progress
@@ -22,49 +23,61 @@ from plugins.ui import file_action_menu, rename_output_menu
 VIDEO_EXTENSIONS = {"mp4", "mkv", "webm", "mov", "avi", "flv", "ts", "m4v"}
 
 
-def _video_upload_name(filename: str) -> str:
-    return f"{_base_without_extension(filename)}.mp4"
-
-
-async def _prepare_video(job: Job, path: str, filename: str):
-    upload_name = _video_upload_name(filename)
-    prepared = os.path.join(job.work_dir, f".telegram_{uuid.uuid4().hex}.mp4")
-    upload_path = await prepare_video_for_telegram(path, prepared)
-    if not upload_path:
-        raise RuntimeError("Could not prepare a valid Telegram-compatible video")
-    duration, width, height = await get_video_info(upload_path)
-    if duration <= 0 or width <= 0 or height <= 0:
-        raise RuntimeError("Video metadata could not be read")
-    return upload_path, upload_name, duration, width, height
-
-
 async def _show_upload_start(status: Message | None, filename: str):
     if status is None:
         return
     try:
-        await status.edit_text(f"📤 **Uploading**\n\n📂 `{filename}`\n\n⚡ Preparing Telegram upload...")
+        await status.edit_text(
+            f"📤 **Uploading**\n\n📂 \`{filename}\`"
+        )
     except Exception:
         pass
 
 
-async def _send_video(client: Client, job: Job, path: str, filename: str, status: Message | None = None, *, prepared_video: bool = False):
+async def _send_video(
+    client: Client,
+    job: Job,
+    path: str,
+    filename: str,
+    status: Message | None = None,
+    *,
+    prepared_video: bool = False,
+):
+    """Upload an existing MP4 directly without any re-encode/remux."""
     await _show_upload_start(status, filename)
-    if prepared_video:
-        upload_path = path
-        upload_name = filename
-    else:
-        upload_path, upload_name, _duration, _width, _height = await _prepare_video(job, path, filename)
+    result = await upload_job(
+        client,
+        job,
+        path,
+        filename,
+        status,
+        as_video=True,
+        prepared_video=True,
+    )
+    if not result:
+        raise RuntimeError("Telegram returned no video message after upload")
+    return result
+
+
+async def _apply_user_metadata(job: Job, path: str) -> str:
+    if not os.path.isfile(path) or os.path.getsize(path) <= 0:
+        return path
     try:
-        result = await upload_job(client, job, upload_path, upload_name, status, as_video=True, prepared_video=prepared_video)
-        if not result:
-            raise RuntimeError("Telegram returned no video message after upload")
-        return result
-    finally:
-        if not prepared_video and upload_path != path:
-            try:
-                os.remove(upload_path)
-            except OSError:
-                pass
+        settings = await get_metadata(job.user_id)
+        temp = os.path.join(
+            job.work_dir,
+            f".metadata_{uuid.uuid4().hex}.mkv"
+        )
+        # Keep the original extension/container where possible. FFmpeg stream
+        # copy does not re-encode video or audio.
+        ext = os.path.splitext(path)[1] or ".mkv"
+        temp = os.path.join(job.work_dir, f".metadata_{uuid.uuid4().hex}{ext}")
+        result = await apply_metadata_to_media(path, temp, settings)
+        if result and os.path.isfile(result) and os.path.getsize(result) > 0:
+            os.replace(result, path)
+        return path
+    except Exception:
+        return path
 
 
 async def _send_plain_output(client: Client, job: Job, path: str, filename: str, status: Message | None = None):
@@ -81,6 +94,7 @@ async def _send_plain_output(client: Client, job: Job, path: str, filename: str,
 
 
 async def _deliver_output(client: Client, job: Job, path: str, filename: str, status: Message | None = None, *, prepared_video: bool = False):
+    path = await _apply_user_metadata(job, path)
     if _extension(filename) == "mp4" or (job.mime_type or "") == "video/mp4":
         if is_large_video(path):
             parts = await split_video_for_telegram(path, job.work_dir, filename)
