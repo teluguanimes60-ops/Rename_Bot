@@ -6,7 +6,8 @@ from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from helper.database import db
 from helper.i18n import t
 from language.strings import tr
-from plugins.ui import language_keyboard, thumbnail_menu, permanent_thumbnail_menu\nfrom language.strings import localize_markup
+from plugins.ui import language_keyboard, thumbnail_menu, permanent_thumbnail_menu
+from language.strings import localize_markup
 
 
 async def _language(user_id: int) -> str:
