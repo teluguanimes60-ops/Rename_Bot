@@ -313,12 +313,13 @@ async def rename_output_fix(client, cb):
             job.job_id,
             extra={**job.extra, "name_submitted": True, "auto_name": name},
         )
-        task = await register_task(job.job_id)
-        try:
-            from plugins.rename_reply_responder import process_custom_name_job
-            await process_custom_name_job(client, cb.message, job, name)
-        finally:
-            await unregister_task(job.job_id, task)
+        from plugins.rename_reply_responder import process_custom_name_job, run_name_job_serialized
+        await run_name_job_serialized(
+            client,
+            cb.message,
+            job,
+            lambda current: process_custom_name_job(client, cb.message, current, name),
+        )
     except StopPropagation:
         raise
     except Exception as exc:
