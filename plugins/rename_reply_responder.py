@@ -7,7 +7,7 @@ import shutil
 from pyrogram import Client, StopPropagation, filters
 from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
-from helper.activity_log import mark_rename_completed
+from helper.activity_log import log_rename_request, mark_rename_completed
 from helper.cancel_manager import register_task, unregister_task
 from helper.database import db
 from helper.ffmpeg import convert_media, inspect_media_streams
@@ -46,6 +46,33 @@ async def _download_source(client, message, job, status):
 def _initial_download_text(expected_size: int) -> str:
     total = max(0, int(expected_size or 0))
     return "📥 **Download Progress**\n" + "░" * 24 + " 0.00%\n\n" + f"📦 Size: `0 B` / `{humanbytes(total)}`\n🚀 Speed: `0 B/s`\n⏱ ETA: calculating..."
+
+
+async def _log_rename_activity(job, new_name: str):
+    source = (job.extra or {}).get("source_message")
+    user = getattr(source, "from_user", None)
+    user_name = (
+        str(getattr(user, "first_name", "") or "").strip()
+        or str(getattr(user, "last_name", "") or "").strip()
+        or "Unknown"
+    )
+    first = str(getattr(user, "first_name", "") or "").strip()
+    last = str(getattr(user, "last_name", "") or "").strip()
+    if first and last:
+        user_name = f"{first} {last}"
+    username = getattr(user, "username", None)
+    output_format = _extension(new_name)
+    await log_rename_request(
+        bot_id=int(job.bot_id),
+        job_id=job.job_id,
+        user_id=int(job.user_id),
+        user_name=user_name,
+        username=username,
+        original_name=job.original_name,
+        new_name=new_name,
+        file_size=int((job.extra or {}).get("telegram_file_size", 0) or 0),
+        output_format=output_format,
+    )
 
 
 async def _delete_message_safely(client, chat_id, message_id):
@@ -110,6 +137,7 @@ async def process_custom_name_job(client, message, job, name: str):
         int((job.extra or {}).get("telegram_file_size", 0) or 0),
     )
     try:
+        await _log_rename_activity(job, safe_name)
         await _download_source(client, message, job, status)
 
         output_path = os.path.join(job.work_dir, safe_name)
@@ -169,6 +197,7 @@ async def _process_named_job(client, message, job):
         if _extension(name) != ext: name = f"{_base_without_extension(name)}.{ext}"
         status = await _new_transfer_status(client, message, job, int((job.extra or {}).get("telegram_file_size", 0) or 0))
         try:
+            await _log_rename_activity(job, name)
             await _download_source(client, message, job, status)
             output_path = os.path.join(job.work_dir, name)
             if not await _convert_with_progress(job, status, output_path, ext, name): raise RuntimeError("FFmpeg conversion failed")
