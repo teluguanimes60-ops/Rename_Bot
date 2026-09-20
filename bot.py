@@ -5,7 +5,7 @@ import shutil
 
 from pyrogram import Client
 from pyrogram.errors import FloodWait
-from pyrogram.types import BotCommand
+from pyrogram.types import BotCommand, CallbackQuery, Message
 
 from config import Config
 from helper.clone_manager import CloneManager
@@ -17,7 +17,69 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(levelname)s - %(message)s",
 )
+
 log = logging.getLogger("AniToon")
+
+def install_runtime_localization():
+    """Translate known bot UI text automatically for the selected user language."""
+    from helper.i18n import localize_text, user_language
+
+    if getattr(Client, "_anitoon_localization_installed", False):
+        return
+
+    original_send_message = Client.send_message
+    original_reply_text = Message.reply_text
+    original_edit_text = Message.edit_text
+    original_reply_caption = getattr(Message, "reply_caption", None)
+    original_edit_caption = getattr(Message, "edit_caption", None)
+    original_answer = CallbackQuery.answer
+
+    async def localized_send_message(self, chat_id, text=None, *args, **kwargs):
+        if isinstance(text, str):
+            text = await localize_text_async(chat_id, text)
+        return await original_send_message(self, chat_id, text, *args, **kwargs)
+
+    async def localized_reply_text(self, text=None, *args, **kwargs):
+        if isinstance(text, str) and getattr(self, "from_user", None):
+            text = await localize_text_async(self.from_user.id, text)
+        return await original_reply_text(self, text, *args, **kwargs)
+
+    async def localized_edit_text(self, text=None, *args, **kwargs):
+        if isinstance(text, str) and getattr(self, "from_user", None):
+            text = await localize_text_async(self.from_user.id, text)
+        return await original_edit_text(self, text, *args, **kwargs)
+
+    async def localized_reply_caption(self, caption=None, *args, **kwargs):
+        if isinstance(caption, str) and getattr(self, "from_user", None):
+            caption = await localize_text_async(self.from_user.id, caption)
+        return await original_reply_caption(self, caption, *args, **kwargs)
+
+    async def localized_edit_caption(self, caption=None, *args, **kwargs):
+        if isinstance(caption, str) and getattr(self, "from_user", None):
+            caption = await localize_text_async(self.from_user.id, caption)
+        return await original_edit_caption(self, caption, *args, **kwargs)
+
+    async def localized_answer(self, text=None, *args, **kwargs):
+        if isinstance(text, str) and getattr(self, "from_user", None):
+            text = await localize_text_async(self.from_user.id, text)
+        return await original_answer(self, text, *args, **kwargs)
+
+    async def localize_text_async(user_id, text):
+        try:
+            return localize_text(await user_language(int(user_id)), text)
+        except Exception:
+            return text
+
+    Client.send_message = localized_send_message
+    Message.reply_text = localized_reply_text
+    Message.edit_text = localized_edit_text
+    if original_reply_caption:
+        Message.reply_caption = localized_reply_caption
+    if original_edit_caption:
+        Message.edit_caption = localized_edit_caption
+    CallbackQuery.answer = localized_answer
+    Client._anitoon_localization_installed = True
+
 
 BOT_COMMANDS = [
     BotCommand("start", "Open AniToon"),
@@ -33,6 +95,7 @@ BOT_COMMANDS = [
 
 class Bot(Client):
     def __init__(self):
+        install_runtime_localization()
         super().__init__(
             name="AniToon_1Bot",
             api_id=Config.API_ID,
