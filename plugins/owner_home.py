@@ -22,7 +22,7 @@ def owner_keyboard():
                 callback_data="create_clone",
             )
         ],
-        [InlineKeyboardButton("🖼 Free Paid Images <20MB", callback_data="owner:small_images")],
+        [InlineKeyboardButton("🖼 Remove Paid Stars Photo", callback_data="owner:paid_photo")],
         [InlineKeyboardButton("👑 Owner Panel", callback_data="owner:panel")],
     ])
 
@@ -87,6 +87,45 @@ async def owner_start_page(client, message):
         await _owner_home_text(client, int(message.from_user.id)),
         reply_markup=owner_keyboard(),
     )
+    raise StopPropagation
+
+
+
+
+@Client.on_callback_query(filters.regex(r"^owner:paid_photo$"), group=-300)
+async def owner_paid_photo_page(client, callback_query):
+    if not getattr(client, "is_main_bot", False) or not is_owner(callback_query.from_user.id):
+        await callback_query.answer("Owner access only.", show_alert=True)
+        raise StopPropagation
+
+    from helper.database import db
+    clear_pending(callback_query.from_user.id)
+    await db.set_paid_photo_waiting(True)
+    await callback_query.answer()
+    await callback_query.message.edit_text(
+        "🖼 **Remove Paid Stars from Photo**\n\n"
+        "Send one paid Stars photo now.\n\n"
+        "The bot will process it and send it back to you as a normal free photo.\n\n"
+        "✅ Only photos up to 20 MB are accepted.\n"
+        "⏳ Processing progress will be shown.",
+        reply_markup=InlineKeyboardMarkup([
+            [InlineKeyboardButton("❌ Cancel", callback_data="owner:paid_photo:cancel")]
+        ]),
+    )
+    raise StopPropagation
+
+
+@Client.on_callback_query(filters.regex(r"^owner:paid_photo:cancel$"), group=-300)
+async def owner_paid_photo_cancel(client, callback_query):
+    if not getattr(client, "is_main_bot", False) or not is_owner(callback_query.from_user.id):
+        await callback_query.answer("Owner access only.", show_alert=True)
+        raise StopPropagation
+
+    from helper.database import db
+    await db.set_paid_photo_waiting(False)
+    clear_pending(callback_query.from_user.id)
+    await callback_query.answer()
+    await show_owner_home(client, callback_query.message)
     raise StopPropagation
 
 
