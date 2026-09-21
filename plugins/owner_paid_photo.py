@@ -51,15 +51,34 @@ def _preview_bytes(value):
             return None
         seen.add(id(obj))
 
+        class_name = type(obj).__name__
         raw_bytes = getattr(obj, "bytes", None)
         if isinstance(raw_bytes, (bytes, bytearray)) and raw_bytes:
-            return bytes(raw_bytes)
+            # Telegram's cached/stripped preview variants contain the actual
+            # thumbnail bytes. Return them directly.
+            if class_name in {"PhotoCachedSize", "PhotoStrippedSize"}:
+                return bytes(raw_bytes)
 
-        for attr in ("thumb", "photo", "media", "raw"):
+        # Some generated wrappers expose the thumbnail one level deeper.
+        for attr in (
+            "thumb",
+            "photo",
+            "media",
+            "extended_media",
+            "raw",
+            "_raw",
+        ):
             child = getattr(obj, attr, None)
-            result = walk(child)
-            if result:
-                return result
+            if isinstance(child, (list, tuple)):
+                for item in child:
+                    result = walk(item)
+                    if result:
+                        return result
+            else:
+                result = walk(child)
+                if result:
+                    return result
+
         return None
 
     return walk(value)
@@ -82,10 +101,14 @@ async def _save_paid_preview_thumbnail(client, message: Message):
 
     preview_data = _preview_bytes(thumb) if thumb is not None else None
 
-    # Pyrofork may expose Telegram's preview constructor without the cached
-    # bytes on the high-level object. Read the same message through a
-    # read-only MTProto client so PhotoCachedSize/PhotoStrippedSize previews
-    # can be converted to a normal JPEG. No purchase/unlock is performed.
+    # Pyrofork can keep the actual PhotoCachedSize/PhotoStrippedSize object
+    # on the raw message even when the high-level wrapper omits its bytes.
+    if not preview_data:
+        preview_data = _preview_bytes(getattr(message, "_raw", None))
+
+    # Final fallback: read the same message through a read-only MTProto
+    # client. This still only extracts Telegram's free preview; it never
+    # invokes a purchase or paid-media unlock request.
     if not preview_data:
         preview_data = await get_paid_preview_bytes(
             client,
