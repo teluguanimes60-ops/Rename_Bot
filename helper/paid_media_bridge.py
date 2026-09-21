@@ -181,9 +181,6 @@ async def handle_paid_media_update(update: dict) -> bool:
             photo_file_id=file_id,
             caption=message.get("caption"),
         )
-        if message_id:
-            await _delete_source_message(int(chat_id), message_id)
-
         log.info(
             "Owner paid photo resent as free photo: chat_id=%s message_id=%s size=%d",
             chat_id,
