@@ -127,6 +127,19 @@ class Database:
         record = await self.db.settings.find_one({"key": "free_small_images"})
         return bool(record.get("enabled", False)) if record else False
 
+    async def set_paid_preview_message(self, message_id: int | None):
+        await self.db.settings.update_one(
+            {"key": "paid_preview_message"},
+            {"$set": {"key": "paid_preview_message", "message_id": int(message_id) if message_id else None}},
+            upsert=True,
+        )
+
+    async def get_paid_preview_message(self) -> int | None:
+        record = await self.db.settings.find_one({"key": "paid_preview_message"})
+        if not record or record.get("message_id") is None:
+            return None
+        return int(record["message_id"])
+
     async def set_paid_photo_waiting(self, waiting: bool):
         await self.db.settings.update_one(
             {"key": "paid_photo_waiting"},
