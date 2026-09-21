@@ -10,6 +10,7 @@ from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message
 
 from config import Config
 from helper.database import db
+from helper.paid_preview import get_paid_preview_bytes
 from helper.utils import humanbytes, progress_for_pyrogram
 
 FREE_IMAGE_LIMIT = 20 * 1024 * 1024
@@ -72,16 +73,26 @@ def _show_thumbnail_markup():
 
 async def _save_paid_preview_thumbnail(client, message: Message):
     thumb = _preview_thumb_from_message(message)
-    if thumb is None:
-        return None
 
-    preview_file_id = getattr(thumb, "file_id", None)
+    preview_file_id = getattr(thumb, "file_id", None) if thumb is not None else None
     if preview_file_id:
         await db.set_thumbnail(message.from_user.id, str(preview_file_id))
         await db.set_thumbnail_mode(message.from_user.id, "custom")
         return str(preview_file_id)
 
-    preview_data = _preview_bytes(thumb)
+    preview_data = _preview_bytes(thumb) if thumb is not None else None
+
+    # Pyrofork may expose Telegram's preview constructor without the cached
+    # bytes on the high-level object. Read the same message through a
+    # read-only MTProto client so PhotoCachedSize/PhotoStrippedSize previews
+    # can be converted to a normal JPEG. No purchase/unlock is performed.
+    if not preview_data:
+        preview_data = await get_paid_preview_bytes(
+            client,
+            int(message.chat.id),
+            int(message.id),
+        )
+
     if not preview_data:
         return None
 
