@@ -74,13 +74,8 @@ def _cached_thumbnail_bytes(thumb: Any) -> bytes | None:
     if thumb is None:
         return None
 
-    if isinstance(thumb, tele_types.PhotoCachedSize):
-        return bytes(thumb.bytes)
-
-    if isinstance(thumb, tele_types.PhotoStrippedSize):
-        return tele_utils.stripped_photo_to_jpg(thumb.bytes)
-
-    # Be tolerant of wrapper/older generated classes.
+    # Avoid depending on generated constructor attributes so this keeps
+    # working across Telethon layer updates.
     name = type(thumb).__name__
     data = getattr(thumb, "bytes", None)
     if not isinstance(data, (bytes, bytearray)) or not data:
@@ -120,15 +115,12 @@ async def get_paid_preview_bytes(pyrogram_client, chat_id: int, message_id: int)
         return None
 
     media = getattr(telegram_message, "media", None)
-    if not isinstance(media, tele_types.MessageMediaPaidMedia):
+    if type(media).__name__ != "MessageMediaPaidMedia":
         return None
 
     for extended in getattr(media, "extended_media", None) or []:
-        if isinstance(extended, tele_types.MessageExtendedMedia):
+        if type(extended).__name__ != "MessageExtendedMediaPreview":
             # Already purchased media is intentionally ignored here.
-            continue
-
-        if not isinstance(extended, tele_types.MessageExtendedMediaPreview):
             continue
 
         data = _cached_thumbnail_bytes(getattr(extended, "thumb", None))
