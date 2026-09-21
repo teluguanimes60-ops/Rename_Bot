@@ -86,7 +86,7 @@ def _preview_bytes(value):
 
 def _show_thumbnail_markup():
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("👁 Show Thumbnail", callback_data="view_thumb")],
+        [InlineKeyboardButton("👁 Show Thumbnail", callback_data="owner:paid_preview:show")],
     ])
 
 
@@ -136,6 +136,7 @@ async def _save_paid_preview_thumbnail(client, message: Message):
         if not saved_file_id:
             return None
 
+        await db.set_paid_preview_message(int(sent.id))
         await db.set_thumbnail(message.from_user.id, str(saved_file_id))
         await db.set_thumbnail_mode(message.from_user.id, "custom")
         try:
@@ -280,5 +281,38 @@ async def owner_paid_photo_message(client, message: Message):
                 pass
     finally:
         shutil.rmtree(work_dir, ignore_errors=True)
+
+    raise StopPropagation
+
+
+@Client.on_callback_query(
+    filters.regex(r"^owner:paid_preview:show$"),
+    group=-10001,
+)
+async def owner_paid_preview_show(client, callback_query):
+    if not Config.OWNER_ID or int(callback_query.from_user.id) != int(Config.OWNER_ID):
+        await callback_query.answer("Owner access only.", show_alert=True)
+        raise StopPropagation
+
+    try:
+        thumb = await db.get_thumbnail(callback_query.from_user.id)
+        if not thumb:
+            await callback_query.answer(
+                "Custom thumbnail is not available.",
+                show_alert=True,
+            )
+            raise StopPropagation
+
+        await callback_query.answer("Loading thumbnail…")
+        await client.send_photo(
+            callback_query.from_user.id,
+            thumb,
+            caption="🖼 **Current Custom Thumbnail**",
+        )
+    except Exception as exc:
+        await callback_query.answer(
+            f"Could not show thumbnail: {str(exc)[:160]}",
+            show_alert=True,
+        )
 
     raise StopPropagation
