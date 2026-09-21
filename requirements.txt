@@ -3,6 +3,7 @@
 # dependencies are built around Pyrogram 2.0.x.
 pyrofork==2.3.69
 TgCrypto==1.2.5
+Telethon==1.45.0
 
 # Async/runtime performance
 uvloop==0.21.0
