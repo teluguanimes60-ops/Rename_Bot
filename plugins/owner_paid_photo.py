@@ -107,7 +107,7 @@ async def _process_paid_gallery(client, message: Message, progress: Message, pre
                 f"🖼 Enhancing image **{index}/{total}** toward 4K...\\n"
                 "🔎 Improving text visibility..."
             )
-            enhanced = enhance_preview_jpeg(raw_data, target_edge=3840)
+            enhanced = enhance_preview_jpeg(raw_data, target_edge=7680)
             if not enhanced:
                 raise RuntimeError(f"Could not enhance preview image {index}.")
             path = os.path.join(work_dir, f"preview_{index}.jpg")
@@ -199,7 +199,7 @@ async def owner_paid_photo_message(client, message: Message):
             # The gallery path is deliberately independent from the user's
             # thumbnail settings. These images are never stored as thumbnails.
             if len(previews) >= 3:
-                await _process_paid_gallery(client, message, progress, previews[:3])
+                await _process_paid_gallery(client, message, progress, previews)
             else:
                 # For one/two previews, return them normally as a small gallery
                 # too; still do not modify the thumbnail setting.
@@ -339,7 +339,7 @@ async def owner_paid_preview_show(client, callback_query):
 
 
 @Client.on_callback_query(
-    filters.regex(r"^owner:paid_gallery:[a-f0-9]{16}:[123]$"),
+    filters.regex(r"^owner:paid_gallery:[a-f0-9]{16}:\\d+$"),
     group=-10001,
 )
 async def owner_paid_gallery_show(client, callback_query):
