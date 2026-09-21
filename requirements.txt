@@ -1,7 +1,7 @@
 # Telegram client + C acceleration
 # Keep the stable Pyrogram API because the current AniToon codebase and
 # dependencies are built around Pyrogram 2.0.x.
-Pyrogram==2.0.106
+pyrofork==2.3.69
 TgCrypto==1.2.5
 
 # Async/runtime performance
