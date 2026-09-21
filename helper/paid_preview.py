@@ -140,42 +140,59 @@ async def close_paid_preview_client():
 
 
 def enhance_preview_jpeg(data: bytes) -> bytes | None:
-    """Upscale and lightly sharpen Telegram's free preview without inventing content."""
+    """Create a clearer, text-oriented JPEG from Telegram's free preview."""
     if not data:
         return None
 
     try:
         import io
-        from PIL import Image, ImageFilter, ImageOps
+        import cv2
+        import numpy as np
+        from PIL import Image, ImageOps
 
         with Image.open(io.BytesIO(data)) as source:
             image = ImageOps.exif_transpose(source).convert("RGB")
+            bgr = cv2.cvtColor(np.asarray(image), cv2.COLOR_RGB2BGR)
 
-            # Keep the original aspect ratio. Telegram's preview may be tiny;
-            # 1280px on the long edge gives a much cleaner thumbnail while
-            # avoiding extreme enlargement.
-            max_edge = max(image.size)
-            if max_edge < 1280:
-                scale = 1280.0 / float(max_edge)
-                target = (
-                    max(1, int(round(image.width * scale))),
-                    max(1, int(round(image.height * scale))),
-                )
-                image = image.resize(target, Image.Resampling.LANCZOS)
-
-            # Two restrained sharpening passes recover edge clarity after
-            # enlargement without changing the actual image content.
-            image = image.filter(ImageFilter.UnsharpMask(radius=1.2, percent=115, threshold=3))
-            image = image.filter(ImageFilter.UnsharpMask(radius=0.6, percent=55, threshold=2))
-
-            out = io.BytesIO()
-            image.save(
-                out,
-                format="JPEG",
-                quality=95,
-                subsampling=0,
-                optimize=True,
+        h, w = bgr.shape[:2]
+        long_edge = max(h, w)
+        target_edge = 1800
+        if long_edge < target_edge:
+            scale = target_edge / float(long_edge)
+            bgr = cv2.resize(
+                bgr,
+                (max(1, int(round(w * scale))), max(1, int(round(h * scale)))),
+                interpolation=cv2.INTER_LANCZOS4,
             )
-            return out.getvalue()
+
+        lab = cv2.cvtColor(bgr, cv2.COLOR_BGR2LAB)
+        l, a, b = cv2.split(lab)
+
+        clahe = cv2.createCLAHE(clipLimit=2.4, tileGridSize=(12, 12))
+        l = clahe.apply(l)
+
+        soft = cv2.GaussianBlur(l, (0, 0), 2.0)
+        l = cv2.addWeighted(l, 1.65, soft, -0.65, 0)
+
+        fine = cv2.GaussianBlur(l, (0, 0), 0.8)
+        l = cv2.addWeighted(l, 1.25, fine, -0.25, 0)
+
+        enhanced = cv2.cvtColor(cv2.merge((l, a, b)), cv2.COLOR_LAB2BGR)
+        enhanced = cv2.fastNlMeansDenoisingColored(
+            enhanced, None, 2, 2, 7, 21
+        )
+
+        rgb = cv2.cvtColor(enhanced, cv2.COLOR_BGR2RGB)
+        output = Image.fromarray(rgb)
+
+        out = io.BytesIO()
+        output.save(
+            out,
+            format="JPEG",
+            quality=96,
+            subsampling=0,
+            optimize=True,
+        )
+        return out.getvalue()
     except Exception:
         return None
