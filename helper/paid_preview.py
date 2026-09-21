@@ -137,3 +137,45 @@ async def close_paid_preview_client():
             await _client.disconnect()
         finally:
             _client = None
+
+
+def enhance_preview_jpeg(data: bytes) -> bytes | None:
+    """Upscale and lightly sharpen Telegram's free preview without inventing content."""
+    if not data:
+        return None
+
+    try:
+        import io
+        from PIL import Image, ImageFilter, ImageOps
+
+        with Image.open(io.BytesIO(data)) as source:
+            image = ImageOps.exif_transpose(source).convert("RGB")
+
+            # Keep the original aspect ratio. Telegram's preview may be tiny;
+            # 1280px on the long edge gives a much cleaner thumbnail while
+            # avoiding extreme enlargement.
+            max_edge = max(image.size)
+            if max_edge < 1280:
+                scale = 1280.0 / float(max_edge)
+                target = (
+                    max(1, int(round(image.width * scale))),
+                    max(1, int(round(image.height * scale))),
+                )
+                image = image.resize(target, Image.Resampling.LANCZOS)
+
+            # Two restrained sharpening passes recover edge clarity after
+            # enlargement without changing the actual image content.
+            image = image.filter(ImageFilter.UnsharpMask(radius=1.2, percent=115, threshold=3))
+            image = image.filter(ImageFilter.UnsharpMask(radius=0.6, percent=55, threshold=2))
+
+            out = io.BytesIO()
+            image.save(
+                out,
+                format="JPEG",
+                quality=95,
+                subsampling=0,
+                optimize=True,
+            )
+            return out.getvalue()
+    except Exception:
+        return None
