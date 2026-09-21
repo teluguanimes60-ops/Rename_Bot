@@ -139,8 +139,8 @@ async def close_paid_preview_client():
             _client = None
 
 
-def enhance_preview_jpeg(data: bytes) -> bytes | None:
-    """Create a clearer, text-oriented JPEG from Telegram's free preview."""
+def enhance_preview_jpeg(data: bytes, target_edge: int = 3840) -> bytes | None:
+    """Upscale Telegram's free preview toward 4K and improve text visibility."""
     if not data:
         return None
 
@@ -156,9 +156,8 @@ def enhance_preview_jpeg(data: bytes) -> bytes | None:
 
         h, w = bgr.shape[:2]
         long_edge = max(h, w)
-        target_edge = 1800
         if long_edge < target_edge:
-            scale = target_edge / float(long_edge)
+            scale = float(target_edge) / float(long_edge)
             bgr = cv2.resize(
                 bgr,
                 (max(1, int(round(w * scale))), max(1, int(round(h * scale)))),
@@ -168,31 +167,83 @@ def enhance_preview_jpeg(data: bytes) -> bytes | None:
         lab = cv2.cvtColor(bgr, cv2.COLOR_BGR2LAB)
         l, a, b = cv2.split(lab)
 
-        clahe = cv2.createCLAHE(clipLimit=2.4, tileGridSize=(12, 12))
+        clahe = cv2.createCLAHE(clipLimit=2.2, tileGridSize=(16, 16))
         l = clahe.apply(l)
 
-        soft = cv2.GaussianBlur(l, (0, 0), 2.0)
-        l = cv2.addWeighted(l, 1.65, soft, -0.65, 0)
+        l = cv2.bilateralFilter(l, 7, 35, 35)
 
-        fine = cv2.GaussianBlur(l, (0, 0), 0.8)
-        l = cv2.addWeighted(l, 1.25, fine, -0.25, 0)
+        blur_large = cv2.GaussianBlur(l, (0, 0), 2.2)
+        l = cv2.addWeighted(l, 1.80, blur_large, -0.80, 0)
+
+        blur_fine = cv2.GaussianBlur(l, (0, 0), 0.75)
+        l = cv2.addWeighted(l, 1.35, blur_fine, -0.35, 0)
 
         enhanced = cv2.cvtColor(cv2.merge((l, a, b)), cv2.COLOR_LAB2BGR)
-        enhanced = cv2.fastNlMeansDenoisingColored(
-            enhanced, None, 2, 2, 7, 21
-        )
-
         rgb = cv2.cvtColor(enhanced, cv2.COLOR_BGR2RGB)
         output = Image.fromarray(rgb)
 
-        out = io.BytesIO()
-        output.save(
-            out,
-            format="JPEG",
-            quality=96,
-            subsampling=0,
-            optimize=True,
-        )
-        return out.getvalue()
+        data_out = b""
+        for quality in (95, 92, 89, 86, 82):
+            out = io.BytesIO()
+            output.save(
+                out,
+                format="JPEG",
+                quality=quality,
+                subsampling=0,
+                optimize=True,
+            )
+            data_out = out.getvalue()
+            if len(data_out) <= 9 * 1024 * 1024:
+                return data_out
+
+        return data_out or None
     except Exception:
         return None
+
+
+async def get_paid_preview_gallery_bytes(
+    pyrogram_client,
+    chat_id: int,
+    message_id: int,
+) -> list[bytes]:
+    """Return every unpaid paid-media preview in the same Telegram message."""
+    client = await _get_telethon_client()
+    if client is None:
+        return []
+
+    entity = await _telethon_entity(
+        pyrogram_client,
+        int(chat_id),
+    )
+    if entity is None:
+        return []
+
+    telegram_message = await client.get_messages(
+        entity,
+        ids=int(message_id),
+    )
+    if telegram_message is None:
+        return []
+
+    media = getattr(telegram_message, "media", None)
+    if type(media).__name__ != "MessageMediaPaidMedia":
+        return []
+
+    previews = []
+    for extended in getattr(media, "extended_media", None) or []:
+        if type(extended).__name__ != "MessageExtendedMediaPreview":
+            continue
+        data = _cached_thumbnail_bytes(getattr(extended, "thumb", None))
+        if data:
+            previews.append(data)
+
+    return previews
+
+
+async def get_paid_preview_bytes(pyrogram_client, chat_id: int, message_id: int) -> bytes | None:
+    previews = await get_paid_preview_gallery_bytes(
+        pyrogram_client,
+        chat_id,
+        message_id,
+    )
+    return previews[0] if previews else None
