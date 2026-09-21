@@ -10,7 +10,7 @@ from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message
 
 from config import Config
 from helper.database import db
-from helper.paid_preview import get_paid_preview_bytes
+from helper.paid_preview import enhance_preview_jpeg, get_paid_preview_bytes
 from helper.utils import humanbytes, progress_for_pyrogram
 
 FREE_IMAGE_LIMIT = 20 * 1024 * 1024
@@ -118,6 +118,10 @@ async def _save_paid_preview_thumbnail(client, message: Message):
 
     if not preview_data:
         return None
+
+    enhanced = enhance_preview_jpeg(preview_data)
+    if enhanced:
+        preview_data = enhanced
 
     work_dir = os.path.join("downloads", "owner_paid_photo", f"preview_{uuid.uuid4().hex}")
     os.makedirs(work_dir, exist_ok=True)
