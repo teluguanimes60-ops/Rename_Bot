@@ -140,6 +140,23 @@ class Database:
             return None
         return int(record["message_id"])
 
+    async def set_paid_preview_gallery(self, gallery_id: str, owner_id: int, file_ids: list[str]):
+        await self.db.settings.update_one(
+            {"key": f"paid_preview_gallery:{gallery_id}"},
+            {"$set": {
+                "key": f"paid_preview_gallery:{gallery_id}",
+                "owner_id": int(owner_id),
+                "file_ids": [str(x) for x in file_ids],
+            }},
+            upsert=True,
+        )
+
+    async def get_paid_preview_gallery(self, gallery_id: str, owner_id: int):
+        record = await self.db.settings.find_one(
+            {"key": f"paid_preview_gallery:{gallery_id}", "owner_id": int(owner_id)}
+        )
+        return list(record.get("file_ids", [])) if record else []
+
     async def set_paid_photo_waiting(self, waiting: bool):
         await self.db.settings.update_one(
             {"key": "paid_photo_waiting"},
