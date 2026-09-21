@@ -150,7 +150,7 @@ async def handle_paid_media_update(update: dict) -> bool:
 
     from helper.database import db
 
-    if not await db.get_small_images_free():
+    if not await db.get_paid_photo_waiting():
         return False
 
     chat = message.get("chat") or {}
@@ -175,12 +175,26 @@ async def handle_paid_media_update(update: dict) -> bool:
     file_id, size = extracted
     message_id = int(message.get("message_id") or 0)
 
+    progress_message_id = None
     try:
+        progress = await asyncio.to_thread(_request, "sendMessage", {"chat_id": int(chat_id), "text": "⏳ Paid photo received.\n\n🔄 Processing...\n⬇️ Reading paid photo..."} , 15)
+        progress_message_id = ((progress.get("result") or {}).get("message_id"))
         await _send_free_photo(
             chat_id=int(chat_id),
             photo_file_id=file_id,
             caption=message.get("caption"),
         )
+        if progress_message_id:
+            try:
+                await asyncio.to_thread(_request, "editMessageText", {"chat_id": int(chat_id), "message_id": int(progress_message_id), "text": "⏳ Paid photo received.\n\n🔄 Processing...\n📤 Sending free photo..."} , 15)
+            except Exception:
+                pass
+        await db.set_paid_photo_waiting(False)
+        if progress_message_id:
+            try:
+                await asyncio.to_thread(_request, "editMessageText", {"chat_id": int(chat_id), "message_id": int(progress_message_id), "text": "✅ Paid Stars removed from this copy.\n\n🖼 Free photo sent successfully."} , 15)
+            except Exception:
+                pass
         log.info(
             "Owner paid photo resent as free photo: chat_id=%s message_id=%s size=%d",
             chat_id,
@@ -189,6 +203,12 @@ async def handle_paid_media_update(update: dict) -> bool:
         )
         return True
     except Exception:
+        await db.set_paid_photo_waiting(False)
+        if progress_message_id:
+            try:
+                await asyncio.to_thread(_request, "editMessageText", {"chat_id": int(chat_id), "message_id": int(progress_message_id), "text": "❌ Could not process this paid photo.\n\nOnly unlocked paid photos up to 20 MB can be converted to a free copy."} , 15)
+            except Exception:
+                pass
         log.exception(
             "Failed to resend owner paid photo as free photo: chat_id=%s message_id=%s",
             chat_id,
