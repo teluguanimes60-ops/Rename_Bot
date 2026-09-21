@@ -6,7 +6,7 @@ import time
 import uuid
 
 from pyrogram import Client, StopPropagation, filters
-from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message
+from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto, Message
 
 from config import Config
 from helper.database import db
@@ -118,7 +118,7 @@ async def _process_paid_gallery(client, message: Message, progress: Message, pre
         # Send the three images as a normal Telegram media group.
         sent_messages = await client.send_media_group(
             chat_id=message.chat.id,
-            media=paths,
+            media=[InputMediaPhoto(path) for path in paths],
         )
 
         file_ids = []
@@ -137,15 +137,13 @@ async def _process_paid_gallery(client, message: Message, progress: Message, pre
             file_ids,
         )
 
-        buttons = [
-            [
-                InlineKeyboardButton(
-                    f"🖼 Image {index}",
-                    callback_data=f"owner:paid_gallery:{gallery_id}:{index}",
-                )
-            ]
+        buttons = [[
+            InlineKeyboardButton(
+                f"🖼 {index}",
+                callback_data=f"owner:paid_gallery:{gallery_id}:{index}",
+            )
             for index in range(1, total + 1)
-        ]
+        ]]
 
         await message.reply_text(
             f"✅ **{total} preview images created in 4K size.**\\n\\n"
