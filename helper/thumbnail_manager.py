@@ -43,10 +43,10 @@ async def _normalize_thumbnail(client, job, source, tag: str, *, local: bool = F
         if not os.path.isfile(raw_path):
             return None, None
 
-        # Telegram thumbnails should be JPEG, <= 320x320 and small enough to
-        # be accepted reliably. Reduce dimensions/quality until <= 190 KB.
-        for size in (320, 256, 192, 160):
-            for quality in (8, 14, 20, 26, 31):
+        # Telegram thumbnail limits are small, but keep the best possible
+        # dimensions/quality before falling back to smaller encodings.
+        for size in (320, 300, 280, 256, 224, 192, 160):
+            for quality in (2, 4, 6, 8, 10, 14, 18, 24, 30):
                 cmd = [
                     "ffmpeg", "-y",
                     "-i", raw_path,
