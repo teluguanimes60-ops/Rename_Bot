@@ -22,6 +22,7 @@ def owner_keyboard():
                 callback_data="create_clone",
             )
         ],
+        [InlineKeyboardButton("🖼 Free Paid Images <20MB", callback_data="owner:small_images")],
         [InlineKeyboardButton("👑 Owner Panel", callback_data="owner:panel")],
     ])
 
