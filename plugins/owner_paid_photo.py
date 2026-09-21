@@ -10,7 +10,7 @@ from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message
 
 from config import Config
 from helper.database import db
-from helper.paid_preview import enhance_preview_jpeg, get_paid_preview_bytes
+from helper.paid_preview import enhance_preview_jpeg, get_paid_preview_bytes, get_paid_preview_gallery_bytes
 from helper.utils import humanbytes, progress_for_pyrogram
 
 FREE_IMAGE_LIMIT = 20 * 1024 * 1024
@@ -90,66 +90,76 @@ def _show_thumbnail_markup():
     ])
 
 
-async def _save_paid_preview_thumbnail(client, message: Message):
-    thumb = _preview_thumb_from_message(message)
-
-    preview_file_id = getattr(thumb, "file_id", None) if thumb is not None else None
-    if preview_file_id:
-        await db.set_thumbnail(message.from_user.id, str(preview_file_id))
-        await db.set_thumbnail_mode(message.from_user.id, "custom")
-        return str(preview_file_id)
-
-    preview_data = _preview_bytes(thumb) if thumb is not None else None
-
-    # Pyrofork can keep the actual PhotoCachedSize/PhotoStrippedSize object
-    # on the raw message even when the high-level wrapper omits its bytes.
-    if not preview_data:
-        preview_data = _preview_bytes(getattr(message, "_raw", None))
-
-    # Final fallback: read the same message through a read-only MTProto
-    # client. This still only extracts Telegram's free preview; it never
-    # invokes a purchase or paid-media unlock request.
-    if not preview_data:
-        preview_data = await get_paid_preview_bytes(
-            client,
-            int(message.chat.id),
-            int(message.id),
-        )
-
-    if not preview_data:
-        return None
-
-    enhanced = enhance_preview_jpeg(preview_data)
-    if enhanced:
-        preview_data = enhanced
-
-    work_dir = os.path.join("downloads", "owner_paid_photo", f"preview_{uuid.uuid4().hex}")
+async def _process_paid_gallery(client, message: Message, progress: Message, preview_data_list: list[bytes]):
+    work_dir = os.path.join(
+        "downloads",
+        "owner_paid_photo",
+        f"gallery_{uuid.uuid4().hex}",
+    )
     os.makedirs(work_dir, exist_ok=True)
-    preview_path = os.path.join(work_dir, "paid_preview.jpg")
 
+    paths = []
     try:
-        with open(preview_path, "wb") as handle:
-            handle.write(preview_data)
+        total = len(preview_data_list)
+        for index, raw_data in enumerate(preview_data_list, 1):
+            await progress.edit_text(
+                f"🆓 **Free Preview Mode**\\n\\n"
+                f"🖼 Enhancing image **{index}/{total}** toward 4K...\\n"
+                "🔎 Improving text visibility..."
+            )
+            enhanced = enhance_preview_jpeg(raw_data, target_edge=3840)
+            if not enhanced:
+                raise RuntimeError(f"Could not enhance preview image {index}.")
+            path = os.path.join(work_dir, f"preview_{index}.jpg")
+            with open(path, "wb") as handle:
+                handle.write(enhanced)
+            paths.append(path)
 
-        sent = await client.send_photo(
+        # Send the three images as a normal Telegram media group.
+        sent_messages = await client.send_media_group(
             chat_id=message.chat.id,
-            photo=preview_path,
-            caption="👁 Telegram free preview saved as Custom Thumbnail.",
+            media=paths,
         )
-        saved_file_id = getattr(getattr(sent, "photo", None), "file_id", None)
-        if not saved_file_id:
-            return None
 
-        await db.set_paid_preview_message(int(sent.id))
-        await db.set_thumbnail(message.from_user.id, str(saved_file_id))
-        await db.set_thumbnail_mode(message.from_user.id, "custom")
-        try:
-            await sent.delete()
-        except Exception:
-            pass
-        return str(saved_file_id)
+        file_ids = []
+        for sent in sent_messages:
+            photo = getattr(sent, "photo", None)
+            if photo:
+                file_ids.append(str(photo[-1].file_id))
+
+        if len(file_ids) != total:
+            raise RuntimeError("Telegram did not return all gallery file IDs.")
+
+        gallery_id = uuid.uuid4().hex[:16]
+        await db.set_paid_preview_gallery(
+            gallery_id,
+            message.from_user.id,
+            file_ids,
+        )
+
+        buttons = [
+            [
+                InlineKeyboardButton(
+                    f"🖼 Image {index}",
+                    callback_data=f"owner:paid_gallery:{gallery_id}:{index}",
+                )
+            ]
+            for index in range(1, total + 1)
+        ]
+
+        await message.reply_text(
+            f"✅ **{total} preview images created in 4K size.**\\n\\n"
+            "These images are **not saved as file/video thumbnails**.\\n"
+            "Tap a button to view an individual image:",
+            reply_markup=InlineKeyboardMarkup(buttons),
+        )
+
+        await db.set_paid_photo_waiting(False)
+        await progress.delete()
+
     finally:
         shutil.rmtree(work_dir, ignore_errors=True)
+
 
 @Client.on_message(filters.private, group=-10000)
 async def owner_paid_photo_message(client, message: Message):
@@ -170,32 +180,40 @@ async def owner_paid_photo_message(client, message: Message):
     if paid_photo is None:
         progress = await message.reply_text(
             "🆓 **Free Preview Mode**\n\n"
-            "🔎 Reading the free preview thumbnail..."
+            "🔎 Reading all free preview images..."
         )
 
         try:
-            saved = await _save_paid_preview_thumbnail(client, message)
-            if not saved:
+            previews = await get_paid_preview_gallery_bytes(
+                client,
+                int(message.chat.id),
+                int(message.id),
+            )
+
+            if not previews:
                 await progress.edit_text(
-                    "❌ **Preview thumbnail is not available.**\n\n"
-                    "Telegram did not provide usable preview data for this photo."
+                    "❌ **Free preview images are not available.**\n\n"
+                    "Telegram did not provide usable preview data."
                 )
                 await db.set_paid_photo_waiting(False)
                 raise StopPropagation
 
-            await db.set_paid_photo_waiting(False)
-            await progress.edit_text(
-                "✅ **Preview saved as Custom Thumbnail.**\n\n"
-                "🖼 This thumbnail will now be used for your processed files and videos.",
-                reply_markup=_show_thumbnail_markup(),
-            )
+            # The gallery path is deliberately independent from the user's
+            # thumbnail settings. These images are never stored as thumbnails.
+            if len(previews) >= 3:
+                await _process_paid_gallery(client, message, progress, previews[:3])
+            else:
+                # For one/two previews, return them normally as a small gallery
+                # too; still do not modify the thumbnail setting.
+                await _process_paid_gallery(client, message, progress, previews)
+
         except StopPropagation:
             raise
         except Exception as exc:
             await db.set_paid_photo_waiting(False)
             try:
                 await progress.edit_text(
-                    "❌ **Could not save the preview thumbnail.**\n\n"
+                    "❌ **Could not create the preview images.**\n\n"
                     f"{str(exc)[:800]}"
                 )
             except Exception:
@@ -316,6 +334,44 @@ async def owner_paid_preview_show(client, callback_query):
     except Exception as exc:
         await callback_query.answer(
             f"Could not show thumbnail: {str(exc)[:160]}",
+            show_alert=True,
+        )
+
+    raise StopPropagation
+
+
+@Client.on_callback_query(
+    filters.regex(r"^owner:paid_gallery:[a-f0-9]{16}:[123]$"),
+    group=-10001,
+)
+async def owner_paid_gallery_show(client, callback_query):
+    if not Config.OWNER_ID or int(callback_query.from_user.id) != int(Config.OWNER_ID):
+        await callback_query.answer("Owner access only.", show_alert=True)
+        raise StopPropagation
+
+    try:
+        parts = callback_query.data.split(":")
+        gallery_id = parts[2]
+        index = int(parts[3]) - 1
+
+        file_ids = await db.get_paid_preview_gallery(
+            gallery_id,
+            callback_query.from_user.id,
+        )
+
+        if index < 0 or index >= len(file_ids):
+            await callback_query.answer("Image is no longer available.", show_alert=True)
+            raise StopPropagation
+
+        await callback_query.answer(f"Loading image {index + 1}…")
+        await client.send_photo(
+            callback_query.from_user.id,
+            file_ids[index],
+            caption=f"🖼 **Preview Image {index + 1}**",
+        )
+    except Exception as exc:
+        await callback_query.answer(
+            f"Could not show image: {str(exc)[:160]}",
             show_alert=True,
         )
 
