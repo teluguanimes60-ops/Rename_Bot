@@ -15,6 +15,12 @@ from helper.utils import humanbytes, progress_for_pyrogram
 FREE_IMAGE_LIMIT = 20 * 1024 * 1024
 
 
+def _paid_media_entries(message: Message):
+    paid_media = getattr(message, "paid_media", None)
+    if not paid_media:
+        return []
+    return list(getattr(paid_media, "extended_media", []) or [])
+
 def _paid_photo_from_message(message: Message):
     for media in _paid_media_entries(message):
         file_id = getattr(media, "file_id", None)
