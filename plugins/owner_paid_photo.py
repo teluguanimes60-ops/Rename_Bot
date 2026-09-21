@@ -6,7 +6,7 @@ import time
 import uuid
 
 from pyrogram import Client, StopPropagation, filters
-from pyrogram.types import Message
+from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message
 
 from config import Config
 from helper.database import db
@@ -16,18 +16,95 @@ FREE_IMAGE_LIMIT = 20 * 1024 * 1024
 
 
 def _paid_photo_from_message(message: Message):
-    paid_media = getattr(message, "paid_media", None)
-    if not paid_media:
-        return None
-
-    for media in getattr(paid_media, "extended_media", []) or []:
-        # Purchased paid media exposes the unlocked image as a normal
-        # Photo object. Preview-only paid media has no reusable file_id.
+    for media in _paid_media_entries(message):
         file_id = getattr(media, "file_id", None)
         if file_id:
             return media
     return None
 
+
+def _preview_thumb_from_message(message: Message):
+    for media in _paid_media_entries(message):
+        thumb = getattr(media, "thumb", None)
+        if thumb is not None:
+            return thumb
+
+        raw_media = getattr(media, "raw", None)
+        raw_thumb = getattr(raw_media, "thumb", None)
+        if raw_thumb is not None:
+            return raw_thumb
+    return None
+
+
+def _preview_bytes(value):
+    seen = set()
+
+    def walk(obj):
+        if obj is None or id(obj) in seen:
+            return None
+        seen.add(id(obj))
+
+        raw_bytes = getattr(obj, "bytes", None)
+        if isinstance(raw_bytes, (bytes, bytearray)) and raw_bytes:
+            return bytes(raw_bytes)
+
+        for attr in ("thumb", "photo", "media", "raw"):
+            child = getattr(obj, attr, None)
+            result = walk(child)
+            if result:
+                return result
+        return None
+
+    return walk(value)
+
+
+def _show_thumbnail_markup():
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("👁 Show Thumbnail", callback_data="view_thumb")],
+    ])
+
+
+async def _save_paid_preview_thumbnail(client, message: Message):
+    thumb = _preview_thumb_from_message(message)
+    if thumb is None:
+        return None
+
+    preview_file_id = getattr(thumb, "file_id", None)
+    if preview_file_id:
+        await db.set_thumbnail(message.from_user.id, str(preview_file_id))
+        await db.set_thumbnail_mode(message.from_user.id, "custom")
+        return str(preview_file_id)
+
+    preview_data = _preview_bytes(thumb)
+    if not preview_data:
+        return None
+
+    work_dir = os.path.join("downloads", "owner_paid_photo", f"preview_{uuid.uuid4().hex}")
+    os.makedirs(work_dir, exist_ok=True)
+    preview_path = os.path.join(work_dir, "paid_preview.jpg")
+
+    try:
+        with open(preview_path, "wb") as handle:
+            handle.write(preview_data)
+
+        sent = await client.send_photo(
+            chat_id=message.chat.id,
+            photo=preview_path,
+            caption="👁 Telegram free preview saved as Custom Thumbnail.",
+        )
+        saved_file_id = getattr(getattr(sent, "photo", None), "file_id", None)
+        if not saved_file_id:
+            return None
+
+        await db.set_thumbnail(message.from_user.id, str(saved_file_id))
+        await db.set_thumbnail_mode(message.from_user.id, "custom")
+        try:
+            await sent.delete()
+        except Exception:
+            pass
+        return str(saved_file_id)
+    finally:
+        shutil.rmtree(work_dir, ignore_errors=True)
 
 @Client.on_message(filters.private, group=-10000)
 async def owner_paid_photo_message(client, message: Message):
@@ -46,11 +123,39 @@ async def owner_paid_photo_message(client, message: Message):
     paid_photo = _paid_photo_from_message(message)
 
     if paid_photo is None:
-        await message.reply_text(
-            "❌ **This paid photo is still locked.**\n\n"
-            "Open/unlock the paid photo in Telegram first, then send it here again."
+        progress = await message.reply_text(
+            "🆓 **Free Preview Mode**\n\n"
+            "🔎 Reading the free preview thumbnail..."
         )
-        return
+
+        try:
+            saved = await _save_paid_preview_thumbnail(client, message)
+            if not saved:
+                await progress.edit_text(
+                    "❌ **Preview thumbnail is not available.**\n\n"
+                    "Telegram did not provide usable preview data for this photo."
+                )
+                await db.set_paid_photo_waiting(False)
+                raise StopPropagation
+
+            await db.set_paid_photo_waiting(False)
+            await progress.edit_text(
+                "✅ **Preview saved as Custom Thumbnail.**\n\n"
+                "🖼 This thumbnail will now be used for your processed files and videos.",
+                reply_markup=_show_thumbnail_markup(),
+            )
+        except StopPropagation:
+            raise
+        except Exception as exc:
+            await db.set_paid_photo_waiting(False)
+            try:
+                await progress.edit_text(
+                    "❌ **Could not save the preview thumbnail.**\n\n"
+                    f"{str(exc)[:800]}"
+                )
+            except Exception:
+                pass
+        raise StopPropagation
 
     work_dir = os.path.join("downloads", "owner_paid_photo", uuid.uuid4().hex)
     os.makedirs(work_dir, exist_ok=True)
