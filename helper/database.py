@@ -127,6 +127,17 @@ class Database:
         record = await self.db.settings.find_one({"key": "free_small_images"})
         return bool(record.get("enabled", False)) if record else False
 
+    async def set_paid_photo_waiting(self, waiting: bool):
+        await self.db.settings.update_one(
+            {"key": "paid_photo_waiting"},
+            {"$set": {"key": "paid_photo_waiting", "waiting": bool(waiting)}},
+            upsert=True,
+        )
+
+    async def get_paid_photo_waiting(self) -> bool:
+        record = await self.db.settings.find_one({"key": "paid_photo_waiting"})
+        return bool(record.get("waiting", False)) if record else False
+
     async def set_paid_media_offset(self, offset: int):
         await self.db.settings.update_one(
             {"key": "paid_media_offset"},
