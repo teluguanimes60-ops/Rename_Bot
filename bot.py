@@ -11,7 +11,6 @@ from config import Config
 from helper.clone_manager import CloneManager
 from helper.message_cleanup import install_auto_cleanup
 from helper.job_state import jobs
-from helper.paid_media_bridge import run_paid_media_bridge
 import helper.auto_queue  # noqa: F401
 
 logging.basicConfig(
@@ -125,8 +124,6 @@ class Bot(Client):
         self.bot_id = 0
         self.bot_username = None
         self.clone_manager = None
-        self._paid_media_stop = asyncio.Event()
-        self._paid_media_task = None
 
     async def _setup_commands(self):
         try:
@@ -199,11 +196,6 @@ class Bot(Client):
                 log.info("Telegram transfer concurrency: %s", Config.MAX_CONCURRENT_TRANSMISSIONS)
                 await self._setup_commands()
                 await self._recover_jobs()
-                self._paid_media_stop.clear()
-                self._paid_media_task = asyncio.create_task(
-                    run_paid_media_bridge(self._paid_media_stop),
-                    name="paid-media-bridge",
-                )
                 if Config.IS_CLONE_ALLOWED:
                     self.clone_manager = CloneManager(self)
                     await self.clone_manager.start_all()
@@ -220,14 +212,6 @@ class Bot(Client):
                 raise
 
     async def stop(self, *args):
-        self._paid_media_stop.set()
-        if self._paid_media_task:
-            self._paid_media_task.cancel()
-            try:
-                await self._paid_media_task
-            except asyncio.CancelledError:
-                pass
-            self._paid_media_task = None
         if self.clone_manager:
             await self.clone_manager.stop_all()
             self.clone_manager = None
