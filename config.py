@@ -66,14 +66,14 @@ class Config:
     # PYROGRAM
     # =========================
 
-    PYROGRAM_WORKERS = max(8, int(os.getenv("PYROGRAM_WORKERS", "32")))
+    PYROGRAM_WORKERS = max(8, int(os.getenv("PYROGRAM_WORKERS", "16")))
 
 
     # =========================
     # JOB / QUEUE SETTINGS
     # =========================
 
-    MAX_ACTIVE_JOBS = 100
+    MAX_ACTIVE_JOBS = 50
 
     MAX_CONCURRENT_TRANSMISSIONS = max(1, int(os.getenv("MAX_CONCURRENT_TRANSMISSIONS", "3")))
 
