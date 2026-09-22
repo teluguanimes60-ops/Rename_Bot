@@ -158,6 +158,14 @@ class Database:
         )
         return list(record.get("file_ids", [])) if record else []
 
+    async def clear_paid_preview_galleries(self, owner_id: int) -> int:
+        """Delete only temporary paid-preview gallery records for this owner."""
+        result = await self.db.settings.delete_many({
+            "owner_id": int(owner_id),
+            "key": {"$regex": r"^paid_preview_gallery:"},
+        })
+        return int(getattr(result, "deleted_count", 0) or 0)
+
     async def set_paid_photo_waiting(self, waiting: bool):
         await self.db.settings.update_one(
             {"key": "paid_photo_waiting"},
