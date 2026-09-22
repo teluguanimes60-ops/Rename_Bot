@@ -11,6 +11,7 @@ from config import Config
 from helper.clone_manager import CloneManager
 from helper.message_cleanup import install_auto_cleanup
 from helper.job_state import jobs
+from helper.database import db
 import helper.auto_queue  # noqa: F401
 
 logging.basicConfig(
@@ -135,9 +136,10 @@ class Bot(Client):
 
 
     async def _cleanup_stale_jobs(self):
-        """Remove abandoned job records left by old deployments."""
+        """Clean abandoned jobs only after the configured recovery window."""
         try:
-            deleted = await db.cleanup_stale_jobs(hours=48)
+            await db.ensure_job_indexes()
+            deleted = await db.cleanup_stale_jobs(days=Config.JOB_RECOVERY_RETENTION_DAYS)
             if deleted:
                 log.info("Removed %s stale job records", deleted)
         except Exception:
