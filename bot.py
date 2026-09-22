@@ -207,6 +207,11 @@ class Bot(Client):
                 log.info("Telegram transfer concurrency: %s", Config.MAX_CONCURRENT_TRANSMISSIONS)
                 await self._setup_commands()
                 await self._cleanup_stale_jobs()
+                try:
+                    from helper.activity_log import ensure_activity_indexes
+                    await ensure_activity_indexes()
+                except Exception:
+                    log.exception("Could not initialize rename activity index")
                 await self._recover_jobs()
                 if Config.IS_CLONE_ALLOWED:
                     self.clone_manager = CloneManager(self)
