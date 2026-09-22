@@ -297,6 +297,8 @@ async def upload_job(client: Client, job: Job, path: str, filename: str, status:
                     job,
                     upload_path,
                     duration,
+                    width,
+                    height,
                 )
             except Exception:
                 thumb, temporary_thumbnail = None, None
