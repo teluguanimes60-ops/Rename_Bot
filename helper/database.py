@@ -287,7 +287,6 @@ class Database:
         return int(getattr(result, "deleted_count", 0) or 0)
 
     async def add_clone(self, owner_id: int, bot_id: int, bot_username: str | None, bot_name: str | None, bot_token: str):
-    async def add_clone(self, owner_id: int, bot_id: int, bot_username: str | None, bot_name: str | None, bot_token: str):
         now = datetime.utcnow()
         await self.clones.update_one({"bot_id": int(bot_id)}, {"$set": {"owner_id": int(owner_id), "bot_id": int(bot_id), "bot_username": bot_username, "bot_name": bot_name, "bot_token": bot_token, "status": "online", "updated_at": now}, "$setOnInsert": {"created_at": now}}, upsert=True)
 
