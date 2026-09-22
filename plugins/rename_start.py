@@ -12,14 +12,10 @@ from plugins.ui import edit_callback_message, file_action_menu
 
 def _force_sub_configured() -> bool:
     """Only run the force-sub gate when the owner actually configured it."""
-    return bool(
-        str(getattr(Config, "FORCE_SUB", "") or "").strip()
-        or str(getattr(Config, "FORCE_SUB_LINKS", "") or "").strip()
-    )
+    return bool(str(getattr(Config, "FORCE_SUB", "") or "").strip())
 
 
-@Client.on_callback_query(filters.regex(r"^start_rename$"), group=-9000)
-async def start_rename(client, callback_query):
+async def open_rename_page(client, callback_query):
     """Open Rename reliably and preserve an already-created file job."""
     user = callback_query.from_user
     if user is None:
