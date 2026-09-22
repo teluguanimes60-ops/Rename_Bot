@@ -178,19 +178,14 @@ async def process_custom_name_job(client, message, job, name: str):
         int((job.extra or {}).get("telegram_file_size", 0) or 0),
     )
     try:
-        # Always expose the download stage from 0% before Telegram starts
-        # transferring bytes. There is no artificial sleep/delay here.
-        expected_size = int((job.extra or {}).get("telegram_file_size", 0) or 0)
-        await progress_for_pyrogram(
-            0,
-            expected_size,
-            "Downloading",
-            status,
-            time.time(),
-            job.job_id,
+        # _new_transfer_status already shows the download stage at 0%.
+        # Start the activity write in parallel so MongoDB latency is hidden
+        # behind the Telegram download.
+        activity_task = asyncio.create_task(
+            _log_rename_activity(job, safe_name)
         )
-        await _log_rename_activity(job, safe_name)
         await _download_source(client, message, job, status)
+        await activity_task
 
         output_path = os.path.join(job.work_dir, safe_name)
         os.replace(job.input_path, output_path)
