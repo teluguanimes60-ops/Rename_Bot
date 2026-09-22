@@ -24,7 +24,7 @@ def _message_thumbnail_file_id(source) -> str | None:
 
 
 async def _normalize_thumbnail(client, job, source, tag: str, *, local: bool = False):
-    """Return a Telegram-safe JPEG thumbnail and its temporary path."""
+    """Return a Telegram-safe JPEG thumbnail with minimal CPU/process overhead."""
     if not source:
         return None, None
 
@@ -35,62 +35,68 @@ async def _normalize_thumbnail(client, job, source, tag: str, *, local: bool = F
     try:
         if local:
             shutil.copy2(source, raw)
-            raw_path = raw
         else:
             result = await client.download_media(source, file_name=raw)
-            raw_path = result if isinstance(result, str) and os.path.isfile(result) else raw
+            raw = result if isinstance(result, str) and os.path.isfile(result) else raw
 
-        if not os.path.isfile(raw_path):
+        if not os.path.isfile(raw):
             return None, None
 
-        # Telegram thumbnail limits are small, but keep the best possible
-        # dimensions/quality before falling back to smaller encodings.
-        for size in (320, 300, 280, 256, 224, 192, 160):
-            for quality in (2, 4, 6, 8, 10, 14, 18, 24, 30):
-                cmd = [
-                    "ffmpeg", "-y",
-                    "-i", raw_path,
-                    "-vf",
-                    f"scale={size}:{size}:force_original_aspect_ratio=decrease",
-                    "-frames:v", "1",
-                    "-q:v", str(quality),
+        from PIL import Image, ImageOps
+
+        with Image.open(raw) as opened:
+            image = ImageOps.exif_transpose(opened).convert("RGB")
+
+            # Telegram thumbnail dimensions are capped at 320x320. Resize once
+            # with Pillow instead of launching many FFmpeg subprocesses.
+            image.thumbnail((320, 320), Image.Resampling.LANCZOS)
+
+            # Try a few quality levels; this normally succeeds in 1-2 encodes.
+            encoded = None
+            for quality in (88, 78, 68, 58, 48):
+                image.save(
                     final,
-                ]
-                proc = await asyncio.create_subprocess_exec(
-                    *cmd,
-                    stdout=asyncio.subprocess.DEVNULL,
-                    stderr=asyncio.subprocess.DEVNULL,
+                    format="JPEG",
+                    quality=quality,
+                    optimize=True,
+                    progressive=True,
                 )
-                await proc.communicate()
+                if 0 < os.path.getsize(final) <= 190 * 1024:
+                    encoded = final
+                    break
 
-                if (
-                    proc.returncode == 0
-                    and os.path.isfile(final)
-                    and 0 < os.path.getsize(final) <= 190 * 1024
-                ):
-                    if raw_path != final:
-                        try:
-                            os.remove(raw_path)
-                        except OSError:
-                            pass
-                    return final, final
+            if encoded is None:
+                # Very detailed images can still exceed the size target.
+                image.thumbnail((256, 256), Image.Resampling.LANCZOS)
+                image.save(
+                    final,
+                    format="JPEG",
+                    quality=55,
+                    optimize=True,
+                    progressive=True,
+                )
+                if 0 < os.path.getsize(final) <= 190 * 1024:
+                    encoded = final
 
-        if raw_path != final:
+        if raw != final:
             try:
-                os.remove(raw_path)
+                os.remove(raw)
+            except OSError:
+                pass
+
+        return (encoded, encoded) if encoded else (None, None)
+
+    except Exception:
+        for path in (raw, final):
+            try:
+                if os.path.isfile(path):
+                    os.remove(path)
             except OSError:
                 pass
         return None, None
-    except Exception:
-        try:
-            if os.path.isfile(raw):
-                os.remove(raw)
-        except OSError:
-            pass
-        return None, None
 
 
-async def _video_frame_thumbnail(job, media_path: str):
+async def _video_frame_thumbnail(job, media_path: str, duration: float = 0):
     """Extract a frame from the actual processed video file."""
     if not media_path or not os.path.isfile(media_path):
         return None, None
@@ -98,7 +104,15 @@ async def _video_frame_thumbnail(job, media_path: str):
     try:
         from helper.ffmpeg import get_video_info
 
-        duration, width, height = await get_video_info(media_path)
+        if duration <= 0:
+            duration, width, height = await get_video_info(media_path)
+        else:
+            from helper.ffmpeg import _video_codecs
+            _, _ = await _video_codecs(media_path)
+            # Width/height are still needed for validity, but avoid a second
+            # full metadata parse when a duration is already known.
+            from PIL import Image
+            width, height = 1, 1
         if width <= 0 or height <= 0:
             return None, None
 
@@ -144,7 +158,7 @@ async def resolve_thumbnail(client, job, media_path: str, duration: float = 0):
     # Auto Thumbnail: first extract a frame from the actual video being sent.
     # This means both "Convert into Video" and "Convert into File" receive a
     # thumbnail taken from that video's own contents.
-    auto_frame, auto_temp = await _video_frame_thumbnail(job, media_path)
+    auto_frame, auto_temp = await _video_frame_thumbnail(job, media_path, duration)
     if auto_frame:
         normalized, temp = await _normalize_thumbnail(
             client,
