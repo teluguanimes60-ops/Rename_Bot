@@ -79,7 +79,6 @@ async def _send_video(
     prepared_video: bool = False,
 ):
     """Upload an existing MP4 directly without any re-encode/remux."""
-    await _show_upload_start(status, filename)
     result = await upload_job(
         client,
         job,
@@ -94,9 +93,33 @@ async def _send_video(
     return result
 
 
+def _user_has_custom_metadata(job: Job) -> bool:
+    """Detect explicit metadata customization from the in-memory user snapshot."""
+    user = (job.extra or {}).get("user_data") or {}
+    explicit_fields = (
+        "audio_prefix", "audio_language", "audio_suffix",
+        "subtitle_prefix", "subtitle_language", "subtitle_suffix",
+    )
+    if any(str(user.get(key) or "").strip() for key in explicit_fields):
+        return True
+    # Preserve compatibility with older records that stored the complete
+    # metadata label in audio_name/sub_name.
+    return (
+        str(user.get("audio_name") or "").strip() not in {"", "AniToon Official"}
+        or str(user.get("sub_name") or "").strip() not in {"", "AniToon Official"}
+    )
+
+
 async def _apply_user_metadata(job: Job, path: str) -> str:
     if not os.path.isfile(path) or os.path.getsize(path) <= 0:
         return path
+
+    # A normal rename does not need a lossless FFmpeg remux when the user is
+    # still on the built-in metadata defaults. This removes a full-file pass
+    # for ordinary rename jobs while keeping customized metadata intact.
+    if not _user_has_custom_metadata(job):
+        return path
+
     try:
         settings = await get_metadata(job.user_id)
         temp = os.path.join(
@@ -121,7 +144,6 @@ async def _send_plain_output(client: Client, job: Job, path: str, filename: str,
     ext, mime = _extension(filename), job.mime_type or ""
     if not force_document and (ext == "mp4" or mime == "video/mp4"):
         return await _send_video(client, job, path, filename, status)
-    await _show_upload_start(status, filename)
     result = await upload_job(client, job, path, filename, status, as_video=False)
     if not result:
         raise RuntimeError("Telegram returned no uploaded result")
