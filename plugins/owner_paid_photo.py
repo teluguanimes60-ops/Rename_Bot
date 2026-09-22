@@ -104,7 +104,7 @@ async def _process_paid_gallery(client, message: Message, progress: Message, pre
         for index, raw_data in enumerate(preview_data_list, 1):
             await progress.edit_text(
                 f"🆓 **Free Preview Mode**\\n\\n"
-                f"🖼 Enhancing image **{index}/{total}** toward 4K...\\n"
+                f"🖼 Enhancing image **{index}/{total}** toward 8K...\\n"
                 "🔎 Improving text visibility..."
             )
             enhanced = enhance_preview_jpeg(raw_data, target_edge=7680)
@@ -137,16 +137,18 @@ async def _process_paid_gallery(client, message: Message, progress: Message, pre
             file_ids,
         )
 
-        buttons = [[
-            InlineKeyboardButton(
-                f"🖼 {index}",
-                callback_data=f"owner:paid_gallery:{gallery_id}:{index}",
-            )
-            for index in range(1, total + 1)
-        ]]
+        buttons = []
+        for start in range(1, total + 1, 5):
+            buttons.append([
+                InlineKeyboardButton(
+                    f"🖼 {index}",
+                    callback_data=f"owner:paid_gallery:{gallery_id}:{index}",
+                )
+                for index in range(start, min(start + 5, total + 1))
+            ])
 
         await message.reply_text(
-            f"✅ **{total} preview images created in 4K size.**\\n\\n"
+            f"✅ **{total} preview images created in 8K-enhanced quality.**\\n\\n"
             "These images are **not saved as file/video thumbnails**.\\n"
             "Tap a button to view an individual image:",
             reply_markup=InlineKeyboardMarkup(buttons),
