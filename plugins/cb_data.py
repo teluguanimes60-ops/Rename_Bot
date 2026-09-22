@@ -562,9 +562,7 @@ async def cb_delete_thumb(
 
     await edit_callback_message(
         callback_query,
-        f"🗑️ **{tr(lang, 'Delete Custom')}**
-
-"
+        f"🗑️ **{tr(lang, 'Delete Custom')}**\n\n"
         f"🚫 **{tr(lang, 'No Thumbnail')}**",
         reply_markup=thumbnail_menu(),
     )
