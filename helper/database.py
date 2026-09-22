@@ -259,6 +259,15 @@ class Database:
         cursor = self.jobs.find({"bot_id": int(bot_id), "state": {"$nin": ["completed", "cancelled"]}})
         return [item async for item in cursor]
 
+    async def cleanup_stale_jobs(self, hours: int = 48) -> int:
+        """Delete unfinished jobs abandoned by an old deployment."""
+        cutoff = datetime.utcnow() - timedelta(hours=max(1, int(hours)))
+        result = await self.jobs.delete_many({
+            "created_at": {"$lt": cutoff},
+            "state": {"$nin": ["completed", "cancelled"]},
+        })
+        return int(getattr(result, "deleted_count", 0) or 0)
+
     async def add_clone(self, owner_id: int, bot_id: int, bot_username: str | None, bot_name: str | None, bot_token: str):
         now = datetime.utcnow()
         await self.clones.update_one({"bot_id": int(bot_id)}, {"$set": {"owner_id": int(owner_id), "bot_id": int(bot_id), "bot_username": bot_username, "bot_name": bot_name, "bot_token": bot_token, "status": "online", "updated_at": now}, "$setOnInsert": {"created_at": now}}, upsert=True)
