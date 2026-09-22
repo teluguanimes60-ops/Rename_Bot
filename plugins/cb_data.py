@@ -1,4 +1,4 @@
-from pyrogram import Client, filters
+from pyrogram import Client, StopPropagation, filters
 from pyrogram.types import (
     InlineKeyboardMarkup,
     InlineKeyboardButton,
@@ -37,7 +37,7 @@ async def cb_language_settings(client: Client, callback_query):
         f"{t(lang, 'select_title')}\n\n{t(lang, 'select_prompt')}",
         reply_markup=language_keyboard(),
     )
-
+    raise StopPropagation
 
 @Client.on_callback_query(filters.regex(r"^lang:select:([a-z]{2,3})$"), group=-3000)
 async def cb_language_select(client: Client, callback_query):
@@ -54,7 +54,7 @@ async def cb_language_select(client: Client, callback_query):
         f"{t(code, 'select_prompt')}",
         reply_markup=language_confirm_keyboard(code),
     )
-
+    raise StopPropagation
 
 @Client.on_callback_query(filters.regex(r"^lang:confirm:([a-z]{2,3})$"), group=-3000)
 async def cb_language_confirm(client: Client, callback_query):
@@ -85,6 +85,7 @@ async def cb_language_confirm(client: Client, callback_query):
 # ============================================================
 # HOME
 # ============================================================
+    raise StopPropagation
 
 @Client.on_callback_query(
     filters.regex(r"^start$")
@@ -103,7 +104,7 @@ async def cb_start(
     if not language:
         await edit_callback_message(
             callback_query,
-            t("en", "select_title") + "\\n\\n" + t("en", "select_prompt"),
+            t("en", "select_title") + "\n\n" + t("en", "select_prompt"),
             reply_markup=language_keyboard(),
         )
         return
@@ -288,6 +289,7 @@ async def cb_help(
 # ============================================================
 # ABOUT
 # ============================================================
+    raise StopPropagation
 
 @Client.on_callback_query(
     filters.regex(r"^about$")
@@ -327,6 +329,7 @@ async def cb_about(
 # ============================================================
 # SETTINGS
 # ============================================================
+    raise StopPropagation
 
 @Client.on_callback_query(
     filters.regex(r"^settings$")
@@ -341,7 +344,7 @@ async def cb_settings(
     lang = await db.get_language(callback_query.from_user.id) or "en"
     await edit_callback_message(
         callback_query,
-        t(lang, "settings_title") + "\\n\\n" + t(lang, "settings_choose"),
+        t(lang, "settings_title") + "\n\n" + t(lang, "settings_choose"),
         reply_markup=settings_menu(),
     )
 
@@ -349,6 +352,7 @@ async def cb_settings(
 # ============================================================
 # CAPTION SETTINGS
 # ============================================================
+    raise StopPropagation
 
 @Client.on_callback_query(
     filters.regex(r"^settings_caption$")
@@ -412,6 +416,7 @@ async def cb_settings_caption(
 # ============================================================
 # THUMBNAIL SETTINGS
 # ============================================================
+    raise StopPropagation
 
 @Client.on_callback_query(
     filters.regex(r"^settings_thumb$")
@@ -450,6 +455,7 @@ async def cb_settings_thumb(
 # ============================================================
 # THUMBNAIL MODE
 # ============================================================
+    raise StopPropagation
 
 @Client.on_callback_query(
     filters.regex(r"^thumb_mode:(none|auto|custom)$"),
@@ -461,11 +467,10 @@ async def cb_thumbnail_mode(
 ):
     mode = callback_query.matches[0].group(1)
     user_id = int(callback_query.from_user.id)
+    await callback_query.answer("Processing…")
 
     if mode == "custom":
         has_thumbnail = bool(await db.get_thumbnail(user_id))
-        await callback_query.answer()
-
         from language.strings import tr
         lang = await db.get_language(user_id) or "en"
         if not has_thumbnail:
@@ -486,7 +491,6 @@ async def cb_thumbnail_mode(
         )
         return
     await db.set_thumbnail_mode(user_id, mode)
-    await callback_query.answer("Thumbnail mode updated ✅", show_alert=True)
     mode_text = {
         "none": "🚫 No Thumbnail",
         "auto": "🤖 Auto Thumbnail",
@@ -533,6 +537,7 @@ async def cb_view_thumb(
 # ============================================================
 # DELETE THUMBNAIL
 # ============================================================
+    raise StopPropagation
 
 @Client.on_callback_query(
     filters.regex(r"^delete_thumb$")
@@ -541,10 +546,6 @@ async def cb_delete_thumb(
     client: Client,
     callback_query,
 ):
-    await db.set_thumbnail(callback_query.from_user.id, None)
-    await db.set_thumbnail_mode(callback_query.from_user.id, "none")
-    from language.strings import tr
-    lang = await db.get_language(callback_query.from_user.id) or "en"
     await callback_query.answer(
         f"🗑 {tr(lang, 'Delete Custom')} — {tr(lang, 'No Thumbnail')}",
         show_alert=True,
@@ -557,9 +558,15 @@ async def cb_delete_thumb(
     )
 
 
+    await db.set_thumbnail(callback_query.from_user.id, None)
+    await db.set_thumbnail_mode(callback_query.from_user.id, "none")
+    from language.strings import tr
+    lang = await db.get_language(callback_query.from_user.id) or "en"
+
 # ============================================================
 # CREATE CLONE BUTTON
 # ============================================================
+    raise StopPropagation
 
 @Client.on_callback_query(
     filters.regex(r"^create_clone$")
@@ -632,6 +639,7 @@ async def cb_set_caption_help(
 # ============================================================
 # METADATA SETTINGS PAGE
 # ============================================================
+    raise StopPropagation
 
 @Client.on_callback_query(
     filters.regex(r"^metadata_settings$")
