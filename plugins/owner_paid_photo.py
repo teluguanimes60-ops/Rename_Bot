@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import os
 import shutil
 import time
@@ -107,12 +108,23 @@ async def _process_paid_gallery(client, message: Message, progress: Message, pre
                 f"🖼 Enhancing image **{index}/{total}** toward 8K...\\n"
                 "🔎 Improving text visibility..."
             )
-            enhanced = enhance_preview_jpeg(raw_data, target_edge=7680)
-            if not enhanced:
-                raise RuntimeError(f"Could not enhance preview image {index}.")
+            # Keep image processing off the async event loop so the bot
+            # remains responsive while the preview is being enhanced.
+            enhanced = await asyncio.to_thread(
+                enhance_preview_jpeg,
+                raw_data,
+                target_edge=4096,
+            )
+
+            # Never leave the owner stuck at "Enhancing image". If enhancement
+            # fails for one preview, send the original free preview instead.
+            payload = enhanced or raw_data
+            if not payload:
+                raise RuntimeError(f"Preview image {index} contains no usable data.")
+
             path = os.path.join(work_dir, f"preview_{index}.jpg")
             with open(path, "wb") as handle:
-                handle.write(enhanced)
+                handle.write(payload)
             paths.append(path)
 
         # Send the three images as a normal Telegram media group.
