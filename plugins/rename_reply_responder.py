@@ -181,11 +181,15 @@ async def process_custom_name_job(client, message, job, name: str):
         # _new_transfer_status already shows the download stage at 0%.
         # Start the activity write in parallel so MongoDB latency is hidden
         # behind the Telegram download.
-        activity_task = asyncio.create_task(
-            _log_rename_activity(job, safe_name)
-        )
+        async def _log_activity_safely():
+            try:
+                await _log_rename_activity(job, safe_name)
+            except Exception:
+                # Activity logging must never block or break the file transfer.
+                pass
+
+        activity_task = asyncio.create_task(_log_activity_safely())
         await _download_source(client, message, job, status)
-        await activity_task
 
         output_path = os.path.join(job.work_dir, safe_name)
         os.replace(job.input_path, output_path)
@@ -202,6 +206,13 @@ async def process_custom_name_job(client, message, job, name: str):
 
         if not results:
             raise RuntimeError("Telegram returned no uploaded result")
+
+        # Logging is best-effort and deliberately happens after upload so
+        # MongoDB latency can never make the transfer appear stuck at 100%.
+        try:
+            await activity_task
+        except Exception:
+            pass
 
         size = int(
             (job.extra or {}).get("downloaded_size", 0)
