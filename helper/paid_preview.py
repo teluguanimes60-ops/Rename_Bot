@@ -139,64 +139,63 @@ async def close_paid_preview_client():
             _client = None
 
 
-def enhance_preview_jpeg(data: bytes, target_edge: int = 3840) -> bytes | None:
-    """Upscale Telegram's free preview toward 4K and improve text visibility."""
+def enhance_preview_jpeg(data: bytes, target_edge: int = 4096) -> bytes | None:
+    """Create a memory-safe high-resolution preview suitable for Render free-tier RAM."""
     if not data:
         return None
 
     try:
         import io
-        import cv2
-        import numpy as np
-        from PIL import Image, ImageOps
+        from PIL import Image, ImageEnhance, ImageFilter, ImageOps
 
         with Image.open(io.BytesIO(data)) as source:
             image = ImageOps.exif_transpose(source).convert("RGB")
-            bgr = cv2.cvtColor(np.asarray(image), cv2.COLOR_RGB2BGR)
 
-        h, w = bgr.shape[:2]
-        long_edge = max(h, w)
-        if long_edge < target_edge:
-            scale = float(target_edge) / float(long_edge)
-            bgr = cv2.resize(
-                bgr,
-                (max(1, int(round(w * scale))), max(1, int(round(h * scale)))),
-                interpolation=cv2.INTER_LANCZOS4,
+            # Keep the output useful while preventing 8K-sized intermediate
+            # arrays from exhausting a small Render instance.
+            max_pixels = 12_000_000
+            width, height = image.size
+            long_edge = max(width, height)
+            scale = 1.0
+            if long_edge < target_edge:
+                scale = float(target_edge) / float(long_edge)
+
+            new_width = max(1, int(round(width * scale)))
+            new_height = max(1, int(round(height * scale)))
+            pixels = new_width * new_height
+            if pixels > max_pixels:
+                pixel_scale = (max_pixels / float(pixels)) ** 0.5
+                new_width = max(1, int(round(new_width * pixel_scale)))
+                new_height = max(1, int(round(new_height * pixel_scale)))
+
+            if (new_width, new_height) != image.size:
+                image = image.resize(
+                    (new_width, new_height),
+                    Image.Resampling.LANCZOS,
+                )
+
+            # Lightweight enhancement without allocating several full-size
+            # OpenCV/LAB buffers at once.
+            image = ImageOps.autocontrast(image, cutoff=1)
+            image = ImageEnhance.Contrast(image).enhance(1.10)
+            image = image.filter(
+                ImageFilter.UnsharpMask(radius=1.2, percent=135, threshold=3)
             )
 
-        lab = cv2.cvtColor(bgr, cv2.COLOR_BGR2LAB)
-        l, a, b = cv2.split(lab)
+            for quality in (92, 88, 84, 80, 76):
+                out = io.BytesIO()
+                image.save(
+                    out,
+                    format="JPEG",
+                    quality=quality,
+                    optimize=True,
+                    progressive=True,
+                )
+                encoded = out.getvalue()
+                if len(encoded) <= 9 * 1024 * 1024:
+                    return encoded
 
-        clahe = cv2.createCLAHE(clipLimit=2.2, tileGridSize=(16, 16))
-        l = clahe.apply(l)
-
-        l = cv2.bilateralFilter(l, 7, 35, 35)
-
-        blur_large = cv2.GaussianBlur(l, (0, 0), 2.2)
-        l = cv2.addWeighted(l, 1.80, blur_large, -0.80, 0)
-
-        blur_fine = cv2.GaussianBlur(l, (0, 0), 0.75)
-        l = cv2.addWeighted(l, 1.35, blur_fine, -0.35, 0)
-
-        enhanced = cv2.cvtColor(cv2.merge((l, a, b)), cv2.COLOR_LAB2BGR)
-        rgb = cv2.cvtColor(enhanced, cv2.COLOR_BGR2RGB)
-        output = Image.fromarray(rgb)
-
-        data_out = b""
-        for quality in (95, 92, 89, 86, 82):
-            out = io.BytesIO()
-            output.save(
-                out,
-                format="JPEG",
-                quality=quality,
-                subsampling=0,
-                optimize=True,
-            )
-            data_out = out.getvalue()
-            if len(data_out) <= 9 * 1024 * 1024:
-                return data_out
-
-        return data_out or None
+            return encoded if encoded else None
     except Exception:
         return None
 
