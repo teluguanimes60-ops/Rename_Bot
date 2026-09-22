@@ -165,16 +165,6 @@ async def thumbnail_manage_callback(client: Client, callback_query):
     # Store the pending action before asking for the image. The photo handler
     # uses this exact per-user state to associate the next photo with this user.
     await db.add_user(user_id)
-    await db.col.update_one(
-        {"id": user_id},
-        {"$set": {"thumbnail_pending": label}},
-        upsert=True,
-    )
-
-    await callback_query.answer(
-        "✅ Now send the image." if label == "add" else "✅ Now send the replacement image."
-    )
-
     # Reuse the existing Thumbnail page message as the prompt.
     # Nothing new is sent to the chat.
     message_id = int(callback_query.message.id)
