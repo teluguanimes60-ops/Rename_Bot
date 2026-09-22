@@ -154,36 +154,45 @@ async def thumbnail_choice_callback(client: Client, callback_query):
         shutil.rmtree(work_dir, ignore_errors=True)
 
 
-@Client.on_callback_query(filters.regex(r"^thumb_manage:(add|replace)$"))
+@Client.on_callback_query(
+    filters.regex(r"^thumb_manage:(add|replace)$"),
+    group=-11000,
+)
 async def thumbnail_manage_callback(client: Client, callback_query):
-    action = callback_query.matches[0].group(1)
     user_id = int(callback_query.from_user.id)
-    has_thumbnail = bool(await db.get_thumbnail(user_id))
-    if action == "replace" and not has_thumbnail:
-        action = "add"
-    label = "replace" if action == "replace" else "add"
-    # Store the pending action before asking for the image. The photo handler
-    # uses this exact per-user state to associate the next photo with this user.
-    await db.add_user(user_id)
-    # Reuse the existing Thumbnail page message as the prompt.
-    # Nothing new is sent to the chat.
-    message_id = int(callback_query.message.id)
-    await db.col.update_one(
-        {"id": user_id},
-        {
-            "$set": {
-                "thumbnail_pending": label,
-                "thumbnail_prompt_message_id": message_id,
-            }
-        },
-        upsert=True,
-    )
+    requested_action = callback_query.matches[0].group(1)
 
+    # Acknowledge immediately so Telegram never leaves the button spinning
+    # while MongoDB/state preparation is running.
     await callback_query.answer(
-        "✅ Now send the image." if label == "add" else "✅ Now send the replacement image."
+        "✅ Now send the image."
+        if requested_action == "add"
+        else "✅ Now send the replacement image."
     )
 
     try:
+        action = requested_action
+        if action == "replace" and not await db.get_thumbnail(user_id):
+            # Protect against a stale Replace button after the thumbnail was deleted.
+            action = "add"
+
+        label = "replace" if action == "replace" else "add"
+        message_id = int(callback_query.message.id)
+
+        # Persist the pending action and the exact settings-page message used
+        # for the in-place setup screen.
+        await db.add_user(user_id)
+        await db.col.update_one(
+            {"id": user_id},
+            {
+                "$set": {
+                    "thumbnail_pending": label,
+                    "thumbnail_prompt_message_id": message_id,
+                }
+            },
+            upsert=True,
+        )
+
         await callback_query.message.edit_text(
             "🖼 **Send the image now.**\n\n"
             + (
@@ -197,7 +206,18 @@ async def thumbnail_manage_callback(client: Client, callback_query):
             ]),
         )
     except Exception:
-        pass
+        # The callback is already acknowledged. Keep the UI usable rather than
+        # leaving Telegram with a silent/spinning button.
+        try:
+            await callback_query.message.edit_text(
+                "❌ **Could not open thumbnail setup.**\n\n"
+                "Please press **Add/Replace Thumbnail** again.",
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton("🔙 Back", callback_data="settings_thumb")]
+                ]),
+            )
+        except Exception:
+            pass
 
 
 
