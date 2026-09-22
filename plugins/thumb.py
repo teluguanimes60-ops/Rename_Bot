@@ -1,7 +1,7 @@
 from pyrogram import Client, filters
 import os
 import shutil
-from pyrogram.types import Message, InlineKeyboardButton, InlineKeyboardMarkup, ForceReply
+from pyrogram.types import Message, InlineKeyboardButton, InlineKeyboardMarkup
 
 from helper.database import db
 
@@ -47,12 +47,8 @@ async def save_photo(client, message: Message):
             {"$unset": {"thumbnail_pending": "", "thumbnail_prompt_message_id": ""}},
         )
 
+        # The setup page is the original message and will be edited to the result.
         prompt_id = user_data.get("thumbnail_prompt_message_id")
-        if prompt_id:
-            try:
-                await client.delete_messages(user_id, int(prompt_id))
-            except Exception:
-                pass
 
         try:
             await message.delete()
@@ -60,11 +56,25 @@ async def save_photo(client, message: Message):
             pass
 
         title = "Added" if pending == "add" else "Replaced"
-        await client.send_message(
-            user_id,
+        success_text = (
             f"✅ **Thumbnail {title} Successfully!**\n\n"
-            "This image is now your permanent custom thumbnail for all processed files and videos.",
+            "This image is now your permanent custom thumbnail for all processed files and videos."
         )
+
+        # Edit the same Thumbnail Setup message instead of creating a new message.
+        prompt_id = user_data.get("thumbnail_prompt_message_id")
+        if prompt_id:
+            try:
+                await client.edit_message_text(
+                    user_id,
+                    int(prompt_id),
+                    success_text,
+                    reply_markup=InlineKeyboardMarkup([
+                        [InlineKeyboardButton("🔙 Back", callback_data="settings_thumb")]
+                    ]),
+                )
+            except Exception:
+                pass
     except Exception as exc:
         try:
             await db.col.update_one(
@@ -100,7 +110,7 @@ async def thumbnail_choice_callback(client: Client, callback_query):
         await callback_query.answer("Thumbnail not changed.")
         try:
             await callback_query.message.edit_text(
-                "🚫 **Thumbnail Not Changed**\\n\\nYour current permanent thumbnail, if any, remains active."
+                "🚫 **Thumbnail Not Changed**\n\nYour current permanent thumbnail, if any, remains active."
             )
         except Exception:
             pass
@@ -124,18 +134,18 @@ async def thumbnail_choice_callback(client: Client, callback_query):
         await db.set_thumbnail_mode(user_id, "custom")
 
         result_text = (
-            "✅ **Thumbnail Added Successfully!**\\n\\n"
+            "✅ **Thumbnail Added Successfully!**\n\n"
             "This image is now your permanent thumbnail for all processed files and videos."
             if action == "add"
             else
-            "✅ **Thumbnail Replaced Successfully!**\\n\\n"
+            "✅ **Thumbnail Replaced Successfully!**\n\n"
             "The new image is now your permanent thumbnail for all processed files and videos."
         )
         await callback_query.message.edit_text(result_text)
     except Exception as exc:
         try:
             await callback_query.message.edit_text(
-                "❌ **Failed to save image as thumbnail.**\\n\\n"
+                "❌ **Failed to save image as thumbnail.**\n\n"
                 f"`{str(exc)[:1000]}`"
             )
         except Exception:
@@ -165,36 +175,40 @@ async def thumbnail_manage_callback(client: Client, callback_query):
         "✅ Now send the image." if label == "add" else "✅ Now send the replacement image."
     )
 
-    prompt = await client.send_message(
-        user_id,
-        "🖼 **Send the image now.**\\n\\n"
-        + (
-            "This image will replace your current permanent thumbnail."
-            if label == "replace"
-            else "This image will be saved as your permanent thumbnail for all processed files and videos."
-        )
-        + "\\n\\n📌 **Send the photo as an image (not as a file/document).**",
-        reply_markup=ForceReply(selective=True),
-    )
-
-    # Keep the prompt tied to the user's pending thumbnail action.
+    # Reuse the existing Thumbnail page message as the prompt.
+    # Nothing new is sent to the chat.
+    message_id = int(callback_query.message.id)
     await db.col.update_one(
         {"id": user_id},
-        {"$set": {"thumbnail_prompt_message_id": int(prompt.id)}},
+        {
+            "$set": {
+                "thumbnail_pending": label,
+                "thumbnail_prompt_message_id": message_id,
+            }
+        },
         upsert=True,
+    )
+
+    await callback_query.answer(
+        "✅ Now send the image." if label == "add" else "✅ Now send the replacement image."
     )
 
     try:
         await callback_query.message.edit_text(
-            "🖼 **Thumbnail Setup**\\n\\n"
-            "✅ **Ready — send your image now.**\\n"
-            "The next photo you send will be saved permanently for your account.",
+            "🖼 **Send the image now.**\n\n"
+            + (
+                "This image will replace your current permanent thumbnail."
+                if label == "replace"
+                else "This image will be saved as your permanent thumbnail for all processed files and videos."
+            )
+            + "\n\n📌 **Send the photo as an image (not as a file/document).**",
             reply_markup=InlineKeyboardMarkup([
                 [InlineKeyboardButton("🔙 Back", callback_data="settings_thumb")]
             ]),
         )
     except Exception:
         pass
+
 
 
 # ============================================================
