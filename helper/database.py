@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta
+import time
 
 import motor.motor_asyncio
 
@@ -249,9 +250,25 @@ class Database:
             return False
         await self.payments.insert_one({"user_id": int(user_id), "bot_id": int(bot_id), "plan": plan_key, "stars": int(stars), "charge_id": charge_id, "created_at": datetime.utcnow()})
         return True
-    async def save_job(self, job_data: dict):
-        await self.jobs.update_one({"job_id": str(job_data["job_id"])}, {"$set": dict(job_data)}, upsert=True)
+    async def ensure_job_indexes(self):
+        """Keep recoverable jobs self-cleaning without per-request delete queries."""
+        try:
+            await self.jobs.create_index("expires_at", expireAfterSeconds=0, name="job_recovery_expires_ttl")
+            return True
+        except Exception:
+            return False
 
+    async def save_job(self, job_data: dict):
+        data = dict(job_data)
+        try:
+            created_at = float(data.get("created_at") or time.time())
+            data["expires_at"] = datetime.utcfromtimestamp(created_at) + timedelta(days=Config.JOB_RECOVERY_RETENTION_DAYS)
+        except Exception:
+            pass
+        await self.jobs.update_one({"job_id": str(data["job_id"])}, {"$set": data}, upsert=True)
+
+    async def delete_job(self, job_id: str):
+        await self.jobs.delete_one({"job_id": str(job_id)})
     async def delete_job(self, job_id: str):
         await self.jobs.delete_one({"job_id": str(job_id)})
 
@@ -259,15 +276,17 @@ class Database:
         cursor = self.jobs.find({"bot_id": int(bot_id), "state": {"$nin": ["completed", "cancelled"]}})
         return [item async for item in cursor]
 
-    async def cleanup_stale_jobs(self, hours: int = 48) -> int:
-        """Delete unfinished jobs abandoned by an old deployment."""
-        cutoff = datetime.utcnow() - timedelta(hours=max(1, int(hours)))
+    async def cleanup_stale_jobs(self, days: int | None = None) -> int:
+        """Remove unfinished jobs only after the full recovery retention window."""
+        retention_days = max(1, int(days if days is not None else Config.JOB_RECOVERY_RETENTION_DAYS))
+        cutoff = time.time() - (retention_days * 24 * 60 * 60)
         result = await self.jobs.delete_many({
             "created_at": {"$lt": cutoff},
             "state": {"$nin": ["completed", "cancelled"]},
         })
         return int(getattr(result, "deleted_count", 0) or 0)
 
+    async def add_clone(self, owner_id: int, bot_id: int, bot_username: str | None, bot_name: str | None, bot_token: str):
     async def add_clone(self, owner_id: int, bot_id: int, bot_username: str | None, bot_name: str | None, bot_token: str):
         now = datetime.utcnow()
         await self.clones.update_one({"bot_id": int(bot_id)}, {"$set": {"owner_id": int(owner_id), "bot_id": int(bot_id), "bot_username": bot_username, "bot_name": bot_name, "bot_token": bot_token, "status": "online", "updated_at": now}, "$setOnInsert": {"created_at": now}}, upsert=True)
