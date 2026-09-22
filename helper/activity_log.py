@@ -10,31 +10,31 @@ _ACTIVITY_INDEX_READY = False
 
 
 async def ensure_activity_indexes():
+    """Create a TTL index once per process and let MongoDB expire old activity."""
     global _ACTIVITY_INDEX_READY
     if _ACTIVITY_INDEX_READY:
         return True
     try:
         await db.db.file_activity.create_index(
-            "completed_at",
-            expireAfterSeconds=7 * 24 * 60 * 60,
-            sparse=True,
-            name="rename_activity_completed_ttl",
+            "expires_at",
+            expireAfterSeconds=0,
+            name="rename_activity_expires_ttl",
         )
         _ACTIVITY_INDEX_READY = True
-        log.info("Rename activity indexes ready")
+        log.info("Rename activity TTL index ready")
         return True
     except Exception:
-        # Retry on the next call instead of permanently marking the index as ready.
         log.exception("Could not create rename activity TTL index")
         return False
 
 
 async def purge_old_rename_activity():
-    await ensure_activity_indexes()
+    """Optional manual cleanup for legacy records; not used on every rename."""
     cutoff = datetime.utcnow() - timedelta(days=7)
     try:
         result = await db.db.file_activity.delete_many({
             "$or": [
+                {"expires_at": {"$lt": datetime.utcnow()}},
                 {"completed_at": {"$lt": cutoff}},
                 {"status": "requested", "created_at": {"$lt": cutoff}},
             ]
@@ -60,9 +60,8 @@ async def log_rename_request(
     file_size: int,
     output_format: str | None = None,
 ):
-    """Record a rename request without ever breaking the actual file job."""
+    """Record a rename request without an extra cleanup query."""
     await ensure_activity_indexes()
-    await purge_old_rename_activity()
     now = datetime.utcnow()
     try:
         await db.db.file_activity.update_one(
@@ -79,6 +78,7 @@ async def log_rename_request(
                 "output_format": str(output_format or ""),
                 "status": "requested",
                 "created_at": now,
+                "expires_at": now + timedelta(days=7),
             }},
             upsert=True,
         )
@@ -88,7 +88,6 @@ async def log_rename_request(
         )
         return True
     except Exception:
-        # Activity logging must never stop a rename/conversion job.
         log.exception("Could not write rename activity job=%s", job_id)
         return False
 
@@ -96,11 +95,13 @@ async def log_rename_request(
 async def mark_rename_completed(job_id: str):
     await ensure_activity_indexes()
     try:
+        now = datetime.utcnow()
         result = await db.db.file_activity.update_one(
             {"job_id": str(job_id)},
             {"$set": {
                 "status": "completed",
-                "completed_at": datetime.utcnow(),
+                "completed_at": now,
+                "expires_at": now + timedelta(days=7),
             }},
         )
         if int(getattr(result, "matched_count", 0) or 0):
@@ -116,7 +117,6 @@ async def mark_rename_completed(job_id: str):
 async def rename_activity_for_day(*, bot_id: int, day) -> list[dict]:
     """Return completed rename activity for one UTC calendar day."""
     await ensure_activity_indexes()
-    await purge_old_rename_activity()
     day = str(day)
     start = datetime.strptime(day, "%Y-%m-%d")
     end = start + timedelta(days=1)
@@ -134,7 +134,7 @@ async def rename_activity_for_day(*, bot_id: int, day) -> list[dict]:
 
 
 async def recent_rename_activity(*, bot_id: int, hours: int = 24, limit: int = 100):
-    await purge_old_rename_activity()
+    await ensure_activity_indexes()
     since = datetime.utcnow() - timedelta(hours=max(1, int(hours)))
     cursor = db.db.file_activity.find(
         {"bot_id": int(bot_id), "created_at": {"$gte": since}}
