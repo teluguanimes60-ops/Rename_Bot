@@ -127,11 +127,30 @@ async def _process_paid_gallery(client, message: Message, progress: Message, pre
                 handle.write(payload)
             paths.append(path)
 
-        # Send the three images as a normal Telegram media group.
-        sent_messages = await client.send_media_group(
-            chat_id=message.chat.id,
-            media=[InputMediaPhoto(path) for path in paths],
-        )
+        # Send as a media group first. If Telegram rejects the group,
+        # fall back to individual photos so the owner still receives every
+        # preview image instead of the workflow stopping at the send stage.
+        try:
+            await progress.edit_text(
+                f"📤 **Sending {total} preview images...**"
+            )
+        except Exception:
+            pass
+
+        try:
+            sent_messages = await client.send_media_group(
+                chat_id=message.chat.id,
+                media=[InputMediaPhoto(path) for path in paths],
+            )
+            sent_messages = list(sent_messages or [])
+        except Exception:
+            sent_messages = []
+            for path in paths:
+                sent = await client.send_photo(
+                    chat_id=message.chat.id,
+                    photo=path,
+                )
+                sent_messages.append(sent)
 
         file_ids = []
         for sent in sent_messages:
