@@ -73,6 +73,9 @@ class Config:
     # JOB / QUEUE SETTINGS
     # =========================
 
+    # Unfinished jobs remain recoverable across deployments for one week.
+    JOB_RECOVERY_RETENTION_DAYS = max(1, int(os.getenv("JOB_RECOVERY_RETENTION_DAYS", "7")))
+
     MAX_ACTIVE_JOBS = 50
 
     MAX_CONCURRENT_TRANSMISSIONS = max(1, int(os.getenv("MAX_CONCURRENT_TRANSMISSIONS", "3")))
