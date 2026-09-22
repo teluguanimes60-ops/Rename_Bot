@@ -96,7 +96,7 @@ async def _normalize_thumbnail(client, job, source, tag: str, *, local: bool = F
         return None, None
 
 
-async def _video_frame_thumbnail(job, media_path: str, duration: float = 0):
+async def _video_frame_thumbnail(job, media_path: str, duration: float = 0, width: int = 0, height: int = 0):
     """Extract a frame from the actual processed video file."""
     if not media_path or not os.path.isfile(media_path):
         return None, None
@@ -104,15 +104,8 @@ async def _video_frame_thumbnail(job, media_path: str, duration: float = 0):
     try:
         from helper.ffmpeg import get_video_info
 
-        if duration <= 0:
+        if duration <= 0 or width <= 0 or height <= 0:
             duration, width, height = await get_video_info(media_path)
-        else:
-            from helper.ffmpeg import _video_codecs
-            _, _ = await _video_codecs(media_path)
-            # Width/height are still needed for validity, but avoid a second
-            # full metadata parse when a duration is already known.
-            from PIL import Image
-            width, height = 1, 1
         if width <= 0 or height <= 0:
             return None, None
 
@@ -130,7 +123,7 @@ async def _video_frame_thumbnail(job, media_path: str, duration: float = 0):
         return None, None
 
 
-async def resolve_thumbnail(client, job, media_path: str, duration: float = 0):
+async def resolve_thumbnail(client, job, media_path: str, duration: float = 0, width: int = 0, height: int = 0):
     """Resolve the user's thumbnail mode for video/document uploads."""
     mode = await db.get_thumbnail_mode(job.user_id)
 
@@ -158,7 +151,7 @@ async def resolve_thumbnail(client, job, media_path: str, duration: float = 0):
     # Auto Thumbnail: first extract a frame from the actual video being sent.
     # This means both "Convert into Video" and "Convert into File" receive a
     # thumbnail taken from that video's own contents.
-    auto_frame, auto_temp = await _video_frame_thumbnail(job, media_path, duration)
+    auto_frame, auto_temp = await _video_frame_thumbnail(job, media_path, duration, width, height)
     if auto_frame:
         normalized, temp = await _normalize_thumbnail(
             client,
