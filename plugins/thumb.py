@@ -13,21 +13,28 @@ from helper.database import db
 @Client.on_message(
     filters.private & filters.photo
 )
-async def save_photo(client: Client, message: Message):
-    """Save every received image immediately as the permanent thumbnail."""
+async def save_photo(client, message: Message):
+    """Save the next photo only when the user explicitly requested Add/Replace."""
     user = message.from_user
     if not user:
         return
 
     user_id = int(user.id)
-    if not await db.is_user_exist(user_id):
-        await db.add_user(user_id)
+    user_data = await db.get_user_data(user_id) or {}
+    pending = str(user_data.get("thumbnail_pending") or "").strip().lower()
+    if pending not in {"add", "replace"}:
+        # Do not consume arbitrary photos as thumbnails.
+        return
 
     photo = getattr(message, "photo", None)
     file_id = getattr(photo, "file_id", None)
     if not file_id:
+        await db.col.update_one(
+            {"id": user_id},
+            {"$unset": {"thumbnail_pending": ""}},
+        )
         try:
-            await message.delete()
+            await message.reply_text("❌ Could not read that image. Please use Add Thumbnail again.")
         except Exception:
             pass
         return
@@ -35,24 +42,37 @@ async def save_photo(client: Client, message: Message):
     try:
         await db.set_thumbnail(user_id, str(file_id))
         await db.set_thumbnail_mode(user_id, "custom")
+        await db.col.update_one(
+            {"id": user_id},
+            {"$unset": {"thumbnail_pending": ""}},
+        )
 
-        # Delete the original image immediately after it has been saved.
         try:
             await message.delete()
         except Exception:
             pass
 
+        title = "Added" if pending == "add" else "Replaced"
         await client.send_message(
             user_id,
-            "✅ **Thumbnail Added Successfully!**\\n\\n"
-            "This image is now your permanent thumbnail for all processed files and videos."
+            f"✅ **Thumbnail {title} Successfully!**\n\n"
+            "This image is now your permanent custom thumbnail for all processed files and videos.",
         )
     except Exception as exc:
-        await client.send_message(
-            user_id,
-            "❌ **Failed to save thumbnail.**\\n\\n"
-            f"`{str(exc)[:1000]}`"
-        )
+        try:
+            await db.col.update_one(
+                {"id": user_id},
+                {"$unset": {"thumbnail_pending": ""}},
+            )
+        except Exception:
+            pass
+        try:
+            await message.reply_text(
+                "❌ **Failed to save thumbnail.**\n\n"
+                f"`{str(exc)[:1000]}`",
+            )
+        except Exception:
+            pass
 
 
 @Client.on_callback_query(filters.regex(r"^thumb_choice:(add|replace|no):(\\d+)$"))
@@ -125,6 +145,11 @@ async def thumbnail_manage_callback(client: Client, callback_query):
     if action == "replace" and not has_thumbnail:
         action = "add"
     label = "replace" if action == "replace" else "add"
+    await db.col.update_one(
+        {"id": user_id},
+        {"$set": {"thumbnail_pending": label}},
+        upsert=True,
+    )
     await callback_query.answer(
         "Send the image you want to replace your thumbnail with."
         if label == "replace"
@@ -150,6 +175,11 @@ async def set_thumbnail_command(
     client: Client,
     message: Message,
 ):
+    await db.col.update_one(
+        {"id": int(message.from_user.id)},
+        {"$set": {"thumbnail_pending": "add"}},
+        upsert=True,
+    )
     await message.reply_text(
         "🖼️ **Send me an image now.**\n\n"
         "The bot will automatically download and save it as your permanent thumbnail for all files and videos."
