@@ -500,6 +500,8 @@ async def cb_thumbnail_mode(
         f"✅ **Thumbnail mode changed**\n\nCurrent mode: **{mode_text}**",
         reply_markup=thumbnail_menu(),
     )
+    raise StopPropagation
+
 # ============================================================
 # VIEW THUMBNAIL
 # ============================================================
@@ -546,22 +548,27 @@ async def cb_delete_thumb(
     client: Client,
     callback_query,
 ):
+    from language.strings import tr
+    lang = await db.get_language(callback_query.from_user.id) or "en"
+
+    # Acknowledge before Mongo operations so Telegram responds immediately.
     await callback_query.answer(
         f"🗑 {tr(lang, 'Delete Custom')} — {tr(lang, 'No Thumbnail')}",
         show_alert=True,
     )
-    await edit_callback_message(
-        callback_query,
-        f"🗑️ **{tr(lang, 'Delete Custom')}**\n\n"
-        f"🚫 **{tr(lang, 'No Thumbnail')}**",
-        reply_markup=thumbnail_menu(),
-    )
-
 
     await db.set_thumbnail(callback_query.from_user.id, None)
     await db.set_thumbnail_mode(callback_query.from_user.id, "none")
-    from language.strings import tr
-    lang = await db.get_language(callback_query.from_user.id) or "en"
+
+    await edit_callback_message(
+        callback_query,
+        f"🗑️ **{tr(lang, 'Delete Custom')}**
+
+"
+        f"🚫 **{tr(lang, 'No Thumbnail')}**",
+        reply_markup=thumbnail_menu(),
+    )
+    raise StopPropagation
 
 # ============================================================
 # CREATE CLONE BUTTON
