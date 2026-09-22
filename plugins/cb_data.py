@@ -240,6 +240,20 @@ async def cb_start(
 
 
 # ============================================================
+# HOME -> RENAME
+# ============================================================
+
+@Client.on_callback_query(
+    filters.regex(r"^start_rename$"),
+    group=-10000,
+)
+async def cb_start_rename(client, callback_query):
+    """Open Rename from Home before any generic callback handlers."""
+    from plugins.rename_start import open_rename_page
+    await open_rename_page(client, callback_query)
+
+
+# ============================================================
 # HELP
 # ============================================================
 
