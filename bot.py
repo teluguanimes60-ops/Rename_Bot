@@ -134,6 +134,15 @@ class Bot(Client):
             log.exception("Could not update Telegram bot commands")
 
 
+    async def _cleanup_stale_jobs(self):
+        """Remove abandoned job records left by old deployments."""
+        try:
+            deleted = await db.cleanup_stale_jobs(hours=48)
+            if deleted:
+                log.info("Removed %s stale job records", deleted)
+        except Exception:
+            log.exception("Could not clean stale job records")
+
     async def _recover_jobs(self):
         recovered = await jobs.restore_from_db(self.bot_id)
         if not recovered:
@@ -195,6 +204,7 @@ class Bot(Client):
                 log.info("Main bot started: @%s (ID: %s)", me.username or "unknown", me.id)
                 log.info("Telegram transfer concurrency: %s", Config.MAX_CONCURRENT_TRANSMISSIONS)
                 await self._setup_commands()
+                await self._cleanup_stale_jobs()
                 await self._recover_jobs()
                 if Config.IS_CLONE_ALLOWED:
                     self.clone_manager = CloneManager(self)
