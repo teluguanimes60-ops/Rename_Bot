@@ -161,28 +161,14 @@ async def _process_paid_gallery(client, message: Message, progress: Message, pre
         if len(file_ids) != total:
             raise RuntimeError("Telegram did not return all gallery file IDs.")
 
-        gallery_id = uuid.uuid4().hex[:16]
-        await db.set_paid_preview_gallery(
-            gallery_id,
-            message.from_user.id,
-            file_ids,
-        )
-
-        buttons = []
-        for start in range(1, total + 1, 5):
-            buttons.append([
-                InlineKeyboardButton(
-                    f"🖼 {index}",
-                    callback_data=f"owner:paid_gallery:{gallery_id}:{index}",
-                )
-                for index in range(start, min(start + 5, total + 1))
-            ])
+        # These preview images are temporary. They are not thumbnails and
+        # must not remain in MongoDB after successful delivery.
+        await db.clear_paid_preview_galleries(message.from_user.id)
 
         await message.reply_text(
-            f"✅ **{total} preview images created in 8K-enhanced quality.**\\n\\n"
-            "These images are **not saved as file/video thumbnails**.\\n"
-            "Tap a button to view an individual image:",
-            reply_markup=InlineKeyboardMarkup(buttons),
+            f"✅ **{total} free preview images sent successfully.**\n\n"
+            "🗑 Temporary paid-preview records were cleared from storage.\n"
+            "🖼 Your permanent custom thumbnail and other settings were not changed.",
         )
 
         await db.set_paid_photo_waiting(False)
