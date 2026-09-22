@@ -11,10 +11,11 @@ from helper.database import db
 # ============================================================
 
 @Client.on_message(
-    filters.private & filters.photo
+    filters.private & (filters.photo | filters.document),
+    group=-9000,
 )
 async def save_photo(client, message: Message):
-    """Save the next photo only when the user explicitly requested Add/Replace."""
+    """Save the next user-sent image only during an Add/Replace thumbnail flow."""
     user = message.from_user
     if not user:
         return
@@ -23,18 +24,26 @@ async def save_photo(client, message: Message):
     user_data = await db.get_user_data(user_id) or {}
     pending = str(user_data.get("thumbnail_pending") or "").strip().lower()
     if pending not in {"add", "replace"}:
-        # Do not consume arbitrary photos as thumbnails.
+        # Never consume ordinary photos/documents as thumbnails.
         return
 
     photo = getattr(message, "photo", None)
-    file_id = getattr(photo, "file_id", None)
+    document = getattr(message, "document", None)
+
+    # Accept normal Telegram photos and image/* documents. The UI asks for a
+    # photo, but accepting an image document makes the flow more reliable.
+    if photo is not None:
+        file_id = getattr(photo, "file_id", None)
+    elif document is not None and str(getattr(document, "mime_type", "") or "").lower().startswith("image/"):
+        file_id = getattr(document, "file_id", None)
+    else:
+        file_id = None
+
     if not file_id:
-        await db.col.update_one(
-            {"id": user_id},
-            {"$unset": {"thumbnail_pending": "", "thumbnail_prompt_message_id": ""}},
-        )
         try:
-            await message.reply_text("❌ Could not read that image. Please use Add Thumbnail again.")
+            await message.reply_text(
+                "❌ Please send an image/photo while Replace Thumbnail is active."
+            )
         except Exception:
             pass
         return
@@ -42,13 +51,17 @@ async def save_photo(client, message: Message):
     try:
         await db.set_thumbnail(user_id, str(file_id))
         await db.set_thumbnail_mode(user_id, "custom")
+        prompt_id = user_data.get("thumbnail_prompt_message_id")
+
         await db.col.update_one(
             {"id": user_id},
-            {"$unset": {"thumbnail_pending": "", "thumbnail_prompt_message_id": ""}},
+            {
+                "$unset": {
+                    "thumbnail_pending": "",
+                    "thumbnail_prompt_message_id": "",
+                }
+            },
         )
-
-        # The setup page is the original message and will be edited to the result.
-        prompt_id = user_data.get("thumbnail_prompt_message_id")
 
         try:
             await message.delete()
@@ -61,8 +74,7 @@ async def save_photo(client, message: Message):
             "This image is now your permanent custom thumbnail for all processed files and videos."
         )
 
-        # Edit the same Thumbnail Setup message instead of creating a new message.
-        prompt_id = user_data.get("thumbnail_prompt_message_id")
+        # Edit the same Thumbnail Setup message.
         if prompt_id:
             try:
                 await client.edit_message_text(
@@ -74,7 +86,17 @@ async def save_photo(client, message: Message):
                     ]),
                 )
             except Exception:
+                # The thumbnail is already saved even if Telegram cannot edit
+                # the old setup message.
                 pass
+
+        # This photo has been fully handled; do not let another media handler
+        # process it as an unrelated file.
+        from pyrogram import StopPropagation
+        raise StopPropagation
+
+    except StopPropagation:
+        raise
     except Exception as exc:
         try:
             await db.col.update_one(
