@@ -78,7 +78,15 @@ class Config:
 
     MAX_ACTIVE_JOBS = 50
 
-    MAX_CONCURRENT_TRANSMISSIONS = max(1, int(os.getenv("MAX_CONCURRENT_TRANSMISSIONS", "3")))
+    # Telegram can serve independent file ranges concurrently. Keep this
+    # higher than the job limit so one large download can use parallel ranges
+    # without allowing unlimited user jobs to run at the same time.
+    MAX_CONCURRENT_TRANSMISSIONS = max(1, int(os.getenv("MAX_CONCURRENT_TRANSMISSIONS", "8")))
+
+    # Turbo download settings. Pyrofork's stream_media() exposes 1 MiB chunks,
+    # so large files are split across several independent Telegram requests.
+    DOWNLOAD_PARALLEL_WORKERS = max(2, min(8, int(os.getenv("DOWNLOAD_PARALLEL_WORKERS", "8"))))
+    DOWNLOAD_PARALLEL_THRESHOLD_MB = max(1, int(os.getenv("DOWNLOAD_PARALLEL_THRESHOLD_MB", "8")))
 
     MAX_CONCURRENT_PROCESSING = max(1, int(os.getenv("MAX_CONCURRENT_PROCESSING", "2")))
 
