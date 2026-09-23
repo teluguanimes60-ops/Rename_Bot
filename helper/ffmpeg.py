@@ -173,6 +173,28 @@ async def remux_with_track_names(input_file, output_file, track_titles: dict[str
     return await _run_ffmpeg(cmd)
 
 
+def _probe_video_fields(data: dict) -> tuple[float, str, str | None, int, int]:
+    """Extract common video fields from one already-completed ffprobe result."""
+    try:
+        duration = float(data.get("format", {}).get("duration", 0) or 0)
+    except (TypeError, ValueError):
+        duration = 0.0
+    video_codec = ""
+    audio_codec = None
+    width = height = 0
+    for stream in data.get("streams", []):
+        kind = stream.get("codec_type")
+        if kind == "video" and not video_codec:
+            video_codec = str(stream.get("codec_name") or "").lower()
+            try:
+                width = int(stream.get("width", 0) or 0)
+                height = int(stream.get("height", 0) or 0)
+            except (TypeError, ValueError):
+                width = height = 0
+        elif kind == "audio" and audio_codec is None:
+            audio_codec = str(stream.get("codec_name") or "").lower()
+    return duration, video_codec, audio_codec, width, height
+
 async def _video_codecs(file_path: str) -> tuple[str, str | None]:
     data = await _probe(file_path)
     video_codec = ""; audio_codec = None
@@ -185,12 +207,12 @@ async def _video_codecs(file_path: str) -> tuple[str, str | None]:
 
 async def prepare_video_for_telegram(input_file: str, output_file: str, progress_callback: ProgressCallback | None = None) -> str | None:
     if not os.path.isfile(input_file) or os.path.getsize(input_file) <= 0: return None
-    duration = await _duration(input_file)
-    video_codec, audio_codec = await _video_codecs(input_file)
+    # One ffprobe pass supplies duration and codecs. This avoids launching
+    # separate probe processes before every conversion.
+    data = await _probe(input_file)
+    duration, video_codec, audio_codec, _, _ = _probe_video_fields(data)
     ext = os.path.splitext(input_file)[1].lower()
     if ext == ".mp4" and video_codec == "h264" and audio_codec in {None, "", "aac"}:
-        # MP4/H264/AAC needs no quality-changing encode. If it is already
-        # fast-start, just hardlink/copy it so upload can begin immediately.
         if not _mp4_needs_faststart(input_file):
             if os.path.abspath(input_file) != os.path.abspath(output_file):
                 try: os.link(input_file, output_file)
@@ -200,16 +222,9 @@ async def prepare_video_for_telegram(input_file: str, output_file: str, progress
                     except Exception: return None
             if progress_callback and duration > 0: await progress_callback(duration, duration)
             return output_file
-        # moov follows mdat: perform the one required lossless remux NOW,
-        # during the explicit MP4 conversion, so the upload has no extra
-        # processing pause after conversion reaches 100%.
         cmd = ["ffmpeg", "-y", "-i", input_file, "-map", "0:v:0", "-map", "0:a?", "-c", "copy", "-movflags", "+faststart", "-sn", output_file]
         if await _run_ffmpeg(cmd, progress_callback, duration) and os.path.isfile(output_file): return output_file
         return None
-    # Prefer a lossless MP4 remux for every source codec first. This keeps
-    # the original video/audio bitrates (and therefore essentially the same
-    # file size) and is dramatically faster than re-encoding. A remux is
-    # enough to change MKV/MOV/etc. into an MP4 container.
     copy_cmd = [
         "ffmpeg", "-y", "-i", input_file,
         "-map", "0:v:0", "-map", "0:a?",
@@ -217,9 +232,6 @@ async def prepare_video_for_telegram(input_file: str, output_file: str, progress
     ]
     if await _run_ffmpeg(copy_cmd, progress_callback, duration) and os.path.isfile(output_file):
         return output_file
-
-    # Some source streams are not accepted by the MP4 muxer. Only in that
-    # case fall back to a real encode.
     if video_codec == "h264":
         cmd = [
             "ffmpeg", "-y", "-i", input_file,
@@ -229,7 +241,6 @@ async def prepare_video_for_telegram(input_file: str, output_file: str, progress
         ]
         if await _run_ffmpeg(cmd, progress_callback, duration) and os.path.isfile(output_file):
             return output_file
-
     cmd = [
         "ffmpeg", "-y", "-i", input_file,
         "-map", "0:v:0?", "-map", "0:a?",
@@ -241,7 +252,6 @@ async def prepare_video_for_telegram(input_file: str, output_file: str, progress
     cmd += ["-progress", "pipe:1", "-nostats", output_file]
     if await _run_ffmpeg(cmd, progress_callback, duration) and os.path.isfile(output_file): return output_file
     return None
-
 
 async def convert_media(input_file, output_file, output_format: str, progress_callback=None):
     output_format = output_format.lower().lstrip(".")
