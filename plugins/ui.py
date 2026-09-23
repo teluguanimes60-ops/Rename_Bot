@@ -35,7 +35,11 @@ def settings_menu():
 
 
 def help_menu():
-    return InlineKeyboardMarkup([[InlineKeyboardButton("⚙️ Settings", callback_data="settings")], [InlineKeyboardButton("🔙 Back", callback_data="home")]])
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("👤 Owner Help", callback_data="owner_help")],
+        [InlineKeyboardButton("⚙️ Settings", callback_data="settings")],
+        [InlineKeyboardButton("🔙 Back", callback_data="home")],
+    ])
 
 
 def thumbnail_menu():
