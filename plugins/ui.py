@@ -12,7 +12,7 @@ def main_menu(is_main_bot: bool = True, is_owner: bool = False):
     """Home screen matching the requested layout."""
     rows = [
         [
-            InlineKeyboardButton("🛠 Help", callback_data="help"),
+            InlineKeyboardButton("🛠 Advanced", callback_data="home_advanced"),
             InlineKeyboardButton("⚙️ Settings", callback_data="settings"),
         ],
         [InlineKeyboardButton("✏️ Rename", callback_data="start_rename")],
@@ -93,6 +93,7 @@ def advanced_menu(job_id: str):
         [InlineKeyboardButton("💬 Extract All Subtitle", callback_data=f"job:extractsubtitle:{job_id}")],
         [InlineKeyboardButton("➕ Add Audio", callback_data=f"job:addaudio:{job_id}"), InlineKeyboardButton("➕ Add Subtitle", callback_data=f"job:addsubtitle:{job_id}")],
         [InlineKeyboardButton("✂️ Trim Video", callback_data=f"job:trim:{job_id}")],
+        [InlineKeyboardButton("🛠 Help", callback_data="help")],
         [InlineKeyboardButton("🔙 Back", callback_data=f"job:back:{job_id}")],
     ])
 
