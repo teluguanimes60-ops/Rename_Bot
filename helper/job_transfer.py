@@ -78,97 +78,6 @@ def _needs_faststart(path: str) -> bool:
     return False
 
 
-async def _download_media_turbo(
-    client: Client,
-    source,
-    output_path: str,
-    total_size: int,
-    status: Message | None,
-    job_id: str,
-    started: float,
-) -> int:
-    """Download a large Telegram file using independent parallel 1 MiB ranges.
-
-    Pyrofork's stream_media() supports chunk offsets, so multiple generators can
-    fetch different ranges concurrently. This keeps a single large download
-    from being limited to one sequential Telegram request at a time.
-    """
-    from config import Config
-    from helper.utils import is_transfer_cancelled
-
-    total_size = int(total_size or 0)
-    if total_size <= 0:
-        raise ValueError("Turbo download requires a known file size")
-
-    chunk_size = 1024 * 1024
-    chunk_count = (total_size + chunk_size - 1) // chunk_size
-    worker_count = max(2, min(int(Config.DOWNLOAD_PARALLEL_WORKERS), chunk_count))
-    ranges = []
-    base = chunk_count // worker_count
-    remainder = chunk_count % worker_count
-    cursor = 0
-    for index in range(worker_count):
-        count = base + (1 if index < remainder else 0)
-        if count:
-            ranges.append((cursor, count))
-            cursor += count
-
-    fd = None
-    completed = 0
-    progress_lock = asyncio.Lock()
-
-    async def fetch_range(start_chunk: int, limit: int):
-        nonlocal completed
-        local_offset = start_chunk * chunk_size
-        received = 0
-        async for data in client.stream_media(source, offset=start_chunk, limit=limit):
-            if is_transfer_cancelled(job_id):
-                raise AniToonTransferCancelled("Transfer cancelled by user")
-            if not data:
-                continue
-            os.pwrite(fd, data, local_offset)
-            local_offset += len(data)
-            received += len(data)
-            async with progress_lock:
-                completed += len(data)
-                current = completed
-            await progress_for_pyrogram(
-                current,
-                total_size,
-                "Downloading",
-                status,
-                started,
-                job_id,
-            )
-        expected = min(limit * chunk_size, total_size - (start_chunk * chunk_size))
-        if received != expected:
-            raise RuntimeError(
-                f"Turbo download range incomplete: expected {expected} bytes, got {received}"
-            )
-
-    try:
-        os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
-        fd = os.open(output_path, os.O_RDWR | os.O_CREAT | os.O_TRUNC, 0o600)
-        os.ftruncate(fd, total_size)
-        tasks = [asyncio.create_task(fetch_range(start, limit)) for start, limit in ranges]
-        try:
-            await asyncio.gather(*tasks)
-        except BaseException:
-            for task in tasks:
-                if not task.done():
-                    task.cancel()
-            await asyncio.gather(*tasks, return_exceptions=True)
-            raise
-        actual = os.fstat(fd).st_size
-    finally:
-        if fd is not None:
-            os.close(fd)
-
-    if actual != total_size:
-        raise RuntimeError(f"Turbo download size mismatch: expected {total_size}, got {actual}")
-    return actual
-
-
 async def download_job(client: Client, message: Message, job: Job, status: Message) -> int:
     expected_size = int(job.extra.get("telegram_file_size", 0) or 0)
     if os.path.isfile(job.input_path) and os.path.getsize(job.input_path) > 0:
@@ -206,44 +115,15 @@ async def download_job(client: Client, message: Message, job: Job, status: Messa
         started = time.time()
         if expected_size:
             await progress_for_pyrogram(0, expected_size, "Downloading", status, started, job.job_id)
-        turbo_threshold = int(getattr(Config, "DOWNLOAD_PARALLEL_THRESHOLD_MB", 8)) * 1024 * 1024
-        use_turbo = bool(expected_size and expected_size >= turbo_threshold)
-        if use_turbo:
-            try:
-                result = job.input_path
-                await _download_media_turbo(
-                    client,
-                    source,
-                    job.input_path,
-                    expected_size,
-                    status,
-                    job.job_id,
-                    started,
-                )
-            except AniToonTransferCancelled:
-                raise
-            except Exception:
-                # Keep the normal Pyrofork download as a safe fallback when a
-                # Telegram DC/network path does not support a parallel range.
-                try:
-                    os.remove(job.input_path)
-                except OSError:
-                    pass
-                reset_progress(job.job_id)
-                await progress_for_pyrogram(0, expected_size, "Downloading", status, started, job.job_id)
-                result = await client.download_media(
-                    message=source,
-                    file_name=job.input_path,
-                    progress=progress_for_pyrogram,
-                    progress_args=("Downloading", status, started, job.job_id),
-                )
-        else:
-            result = await client.download_media(
-                message=source,
-                file_name=job.input_path,
-                progress=progress_for_pyrogram,
-                progress_args=("Downloading", status, started, job.job_id),
-            )
+        # Use Pyrofork's native downloader for a stable Telegram media session.
+        # Concurrent per-range stream_media() sessions can race MTProto
+        # cross-DC authorization imports and trigger AUTH_BYTES_INVALID.
+        result = await client.download_media(
+            message=source,
+            file_name=job.input_path,
+            progress=progress_for_pyrogram,
+            progress_args=("Downloading", status, started, job.job_id),
+        )
         if is_transfer_cancelled(job.job_id):
             raise AniToonTransferCancelled("Transfer cancelled by user")
         path = result if isinstance(result, str) and os.path.isfile(result) else job.input_path
