@@ -10,6 +10,8 @@ from pyrogram import Client
 from pyrogram.errors import FloodWait
 from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message
 
+from config import Config
+
 from helper.cancel_manager import register_task, unregister_task
 from helper.job_state import Job, jobs
 from helper.message_cleanup import protect_transfer_message
