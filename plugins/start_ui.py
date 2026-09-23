@@ -1,13 +1,16 @@
 """Clean AniToon /start experience and start-page actions."""
 
 from pyrogram import Client, StopPropagation, filters
+from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from helper.database import db
 from helper.message_cleanup import protect_start_page
 from helper.plans import get_plan
 from helper.utils import humanbytes
 from plugins.start import get_force_sub_status, make_force_sub_text, make_force_sub_keyboard
-from plugins.ui import main_menu
+from plugins.ui import main_menu, advanced_menu
+from helper.job_state import jobs
+from helper.advanced_quota import plan_advanced_limit
 
 
 async def _require_force_sub(client, user_id: int, message=None) -> bool:
@@ -106,6 +109,76 @@ async def clean_start(client, message):
     raise StopPropagation
 
 
+
+
+
+@Client.on_callback_query(filters.regex(r"^home_advanced$"), group=-200)
+async def home_advanced_action(client, callback_query):
+    """Open Advanced for the user's current file job, or show the daily limits."""
+    await callback_query.answer()
+    user_id = int(callback_query.from_user.id)
+
+    try:
+        if not await _require_force_sub(client, user_id, callback_query.message):
+            raise StopPropagation
+    except StopPropagation:
+        raise
+    except Exception:
+        await callback_query.message.reply_text("⚠️ **Channel verification failed.** Please try again.")
+        raise StopPropagation
+
+    job = await jobs.get_user_job(user_id)
+    if job:
+        await jobs.update(job.job_id, selected_action="advanced_menu")
+        try:
+            await callback_query.message.edit_text(
+                "🛠 **Advanced Options**\n\n"
+                "Choose an advanced operation for this file.",
+                reply_markup=advanced_menu(job.job_id),
+            )
+        except Exception:
+            pass
+        raise StopPropagation
+
+    bot_id = int(getattr(client, "bot_id", 0) or 0)
+    if bot_id <= 0:
+        try:
+            bot_id = int((await client.get_me()).id)
+            client.bot_id = bot_id
+        except Exception:
+            bot_id = 0
+
+    try:
+        subscription = await db.get_subscription(user_id, bot_id)
+        plan = get_plan(subscription.get("plan", "free"))
+        limit = plan_advanced_limit(plan.key)
+        text = (
+            "🛠 **Advanced Options**\n\n"
+            "Send a file first, then open **Advanced** to use these tools.\n\n"
+            f"💎 **Your plan:** {plan.name}\n"
+            f"🎯 **Daily limit:** `{limit} use(s) for each Advanced option`\n\n"
+            "ℹ️ Media Info\n"
+            "🎵 Extract All Audio\n"
+            "💬 Extract All Subtitle\n"
+            "➕ Add Audio\n"
+            "➕ Add Subtitle\n"
+            "✂️ Trim Video"
+        )
+    except Exception:
+        text = (
+            "🛠 **Advanced Options**\n\n"
+            "Send a file first, then open **Advanced** to use the advanced tools."
+        )
+
+    keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton("🛠 Help", callback_data="help")],
+        [InlineKeyboardButton("🔙 Back", callback_data="home")],
+    ])
+    try:
+        await callback_query.message.edit_text(text, reply_markup=keyboard)
+    except Exception:
+        pass
+    raise StopPropagation
 
 @Client.on_callback_query(filters.regex(r"^start_convert$"), group=-200)
 async def start_convert_action(client, callback_query):
