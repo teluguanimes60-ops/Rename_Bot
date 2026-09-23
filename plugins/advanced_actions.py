@@ -34,18 +34,21 @@ async def _require_advanced_use(job, feature: str, message) -> bool:
         return True
     used, limit, plan_name = await _advanced_status(job, feature)
     label = feature_label(feature)
+    text = (
+        "🚫 **Daily Advanced Limit Reached**\n\n"
+        f"🛠 **Option:** {label}\n"
+        f"💎 **Plan:** {plan_name}\n"
+        f"📊 **Used today:** `{used}/{limit}`\n\n"
+        "This advanced option is available again after the daily reset.\n"
+        "💎 Upgrade your plan for a higher daily Advanced limit."
+    )
     try:
-        await message.edit_text(
-            "🚫 **Daily Advanced Limit Reached**\n\n"
-            f"🛠 **Option:** {label}\n"
-            f"💎 **Plan:** {plan_name}\n"
-            f"📊 **Used today:** `{used}/{limit}`\n\n"
-            "This advanced option is available again after the daily reset.\n"
-            "💎 Upgrade your plan for a higher daily Advanced limit.",
-            reply_markup=advanced_menu(job.job_id),
-        )
+        await message.edit_text(text, reply_markup=advanced_menu(job.job_id))
     except Exception:
-        pass
+        try:
+            await message.reply_text(text, reply_markup=advanced_menu(job.job_id))
+        except Exception:
+            pass
     return False
 
 
