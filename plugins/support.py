@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import time
 
 from pyrogram import Client, StopPropagation, filters
 from pyrogram.types import ForceReply, InlineKeyboardButton, InlineKeyboardMarkup, Message
@@ -34,15 +33,15 @@ def _request_buttons(request_id: str):
 
 
 def _request_text(request: dict) -> str:
-    username = f"@{request.get("username")}" if request.get("username") else "No username"
+    username = "@{}".format(request.get("username")) if request.get("username") else "No username"
     return (
-        f"📨 **User Help Request #{request.get("request_id", "-")}**\n\n"
-        f"👤 **User:** {request.get("user_name") or "Unknown"}\n"
+        f"📨 **User Help Request #{request.get('request_id', '-')}**\\n\\n"
+        f"👤 **User:** {request.get('user_name') or 'Unknown'}\\n"
         f"🔗 **Username:** {username}\n"
-        f"🆔 **User ID:** `{request.get("user_id", "-")}`\n"
-        f"🤖 **Bot ID:** `{request.get("bot_id", "-")}`\n\n"
+        f"🆔 **User ID:** `{request.get('user_id', '-')}`\\n"
+        f"🤖 **Bot ID:** `{request.get('bot_id', '-')}`\\n\\n"
         "💬 **Problem:**\n"
-        f"{request.get("message") or "(empty)"}"
+        f"{request.get('message') or '(empty)'}"
     )
 
 
@@ -141,7 +140,7 @@ async def receive_user_support(client, message: Message):
     if owner_id > 0:
         await client.send_message(
             owner_id,
-            f"💬 **New reply from User #{existing["request_id"]}**\n\n{text[:4000]}",
+            f"💬 **New reply from User #{existing['request_id']}**\\n\\n{text[:4000]}",
             reply_markup=_request_buttons(existing["request_id"]),
         )
     await message.reply_text("✅ **Your message was sent to the owner.**")
@@ -168,7 +167,7 @@ async def owner_support_list(client, callback_query):
     for item in requests:
         label = str(item.get("user_name") or item.get("username") or item.get("user_id") or "User")
         problem = " ".join(str(item.get("message") or "").split())[:45]
-        rows.append([InlineKeyboardButton(f"📨 {label}: {problem}", callback_data=f"owner:support:view:{item["request_id"]}")])
+        rows.append([InlineKeyboardButton(f"📨 {label}: {problem}", callback_data=f"owner:support:view:{item['request_id']}")])
     rows.append([InlineKeyboardButton("🔄 Refresh", callback_data="owner:support")])
     rows.append([InlineKeyboardButton("🔙 Owner Panel", callback_data="owner:panel")])
     await callback_query.message.edit_text("📨 **User Help Requests**\n\nSelect a request:", reply_markup=InlineKeyboardMarkup(rows))
@@ -245,14 +244,14 @@ async def receive_owner_support_reply(client, message: Message):
     try:
         sent = await client.send_message(
             user_id,
-            f"👤 **Owner Reply — Request #{request["request_id"]}**\n\n{text[:4000]}\n\n↩️ Reply to this message to continue the conversation.",
+            f"👤 **Owner Reply — Request #{request['request_id']}**\\n\\n{text[:4000]}\\n\\n↩️ Reply to this message to continue the conversation.",
             reply_markup=ForceReply(selective=True),
         )
     except Exception as exc:
         await message.reply_text(f"❌ Could not message the user.\n\n`{str(exc)[:700]}`")
         return
     await db.save_support_reply(request["request_id"], text, sent.id)
-    await message.reply_text(f"✅ **Reply sent to User #{request["request_id"]}.**")
+    await message.reply_text(f"✅ **Reply sent to User #{request['request_id']}.**")
     raise StopPropagation
 
 
