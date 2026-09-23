@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta
 import time
+import uuid
 
 import motor.motor_asyncio
 
@@ -21,6 +22,7 @@ class Database:
         self.payments = self.db.payments
         self.clones = self.db.clones
         self.force_sub_requests = self.db.force_sub_requests
+        self.support_requests = self.db.support_requests
         self.jobs = self.db.jobs
 
     @staticmethod
@@ -114,6 +116,85 @@ class Database:
 
         record = await self.advanced_usage.find_one(identity, {"count": 1})
         return int(record.get("count", 0)) if record else 0
+
+    async def create_support_request(
+        self,
+        user_id: int,
+        bot_id: int,
+        user_text: str,
+        user_name: str = "",
+        username: str | None = None,
+        prompt_message_id: int | None = None,
+    ) -> str:
+        request_id = uuid.uuid4().hex[:10]
+        now = datetime.utcnow()
+        document = {
+            "request_id": request_id,
+            "user_id": int(user_id),
+            "bot_id": int(bot_id),
+            "user_name": str(user_name or ""),
+            "username": str(username or "").lstrip("@") or None,
+            "message": str(user_text or "").strip()[:4000],
+            "status": "open",
+            "created_at": now,
+            "updated_at": now,
+        }
+        if prompt_message_id:
+            document["prompt_message_id"] = int(prompt_message_id)
+        await self.support_requests.insert_one(document)
+        return request_id
+
+    async def get_support_request(self, request_id: str):
+        return await self.support_requests.find_one({"request_id": str(request_id)})
+
+    async def list_support_requests(self, limit: int = 10):
+        cursor = (
+            self.support_requests
+            .find({"status": "open"})
+            .sort("created_at", -1)
+            .limit(max(1, int(limit)))
+        )
+        return [item async for item in cursor]
+
+    async def save_support_reply(self, request_id: str, owner_text: str, bot_message_id: int | None = None):
+        data = {
+            "owner_reply": str(owner_text or "").strip()[:4000],
+            "owner_replied_at": datetime.utcnow(),
+            "updated_at": datetime.utcnow(),
+        }
+        if bot_message_id:
+            data["last_bot_message_id"] = int(bot_message_id)
+        await self.support_requests.update_one(
+            {"request_id": str(request_id)},
+            {"$set": data},
+        )
+
+    async def close_support_request(self, request_id: str):
+        await self.support_requests.update_one(
+            {"request_id": str(request_id)},
+            {"$set": {"status": "closed", "updated_at": datetime.utcnow()}},
+        )
+
+    async def reopen_support_request(self, request_id: str):
+        await self.support_requests.update_one(
+            {"request_id": str(request_id)},
+            {"$set": {"status": "open", "updated_at": datetime.utcnow()}},
+        )
+
+    async def ensure_support_indexes(self):
+        try:
+            await self.support_requests.create_index(
+                [("status", 1), ("created_at", -1)],
+                name="support_open_created",
+            )
+            await self.support_requests.create_index(
+                "request_id",
+                unique=True,
+                name="support_request_id_unique",
+            )
+            return True
+        except Exception:
+            return False
 
     async def mark_force_sub_request(self, user_id: int, chat_id: int):
         await self.force_sub_requests.update_one({"user_id": int(user_id), "chat_id": int(chat_id)}, {"$set": {"user_id": int(user_id), "chat_id": int(chat_id), "requested_at": datetime.utcnow()}}, upsert=True)
