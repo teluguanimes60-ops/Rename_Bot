@@ -156,6 +156,10 @@ async def pre_checkout_handler(client, update, users, chats):
             return await _answer_precheckout(client, update, False, "Telegram Stars payments only.")
         if int(update.total_amount) != int(plan.stars):
             return await _answer_precheckout(client, update, False, "Invalid payment amount.")
+        target_bot_id = int(parts[2])
+        main_bot_id = int(get_bot_id(client))
+        if target_bot_id != main_bot_id and not await db.get_clone_by_bot_id(target_bot_id):
+            return await _answer_precheckout(client, update, False, "Invalid AniToon bot target.")
         await _answer_precheckout(client, update, True)
     except Exception:
         try:
@@ -190,6 +194,9 @@ async def payment_message_handler(client, message):
         plan = get_plan(plan_key)
         if payment.currency != "XTR" or int(payment.total_amount) != int(plan.stars):
             return await message.reply_text("❌ Invalid Stars payment.")
+        main_bot_id = int(get_bot_id(client))
+        if target_bot_id != main_bot_id and not await db.get_clone_by_bot_id(target_bot_id):
+            return await message.reply_text("❌ Invalid AniToon bot target.")
         charge_id = str(payment.telegram_payment_charge_id)
         recorded = await db.record_payment(
             user_id=message.from_user.id,
@@ -198,8 +205,16 @@ async def payment_message_handler(client, message):
             stars=int(payment.total_amount),
             charge_id=charge_id,
         )
+        # A payment is stored as pending before plan activation. If a deploy,
+        # Mongo error, or transient failure happens after Telegram confirms the
+        # payment, the same charge can safely retry activation without charging
+        # the user again.
         if not recorded:
-            return await message.reply_text("ℹ️ This payment was already processed.")
+            existing = await db.get_payment(charge_id)
+            if not existing:
+                return await message.reply_text("⚠️ **Payment record could not be found.**\n\nPlease use /paysupport.")
+            if existing.get("activation_status") == "activated":
+                return await message.reply_text("ℹ️ **This payment was already processed and your plan is active.**")
         await db.set_plan(
             user_id=message.from_user.id,
             bot_id=target_bot_id,
@@ -207,6 +222,7 @@ async def payment_message_handler(client, message):
             stars_paid=int(payment.total_amount),
             payment_id=charge_id,
         )
+        await db.mark_payment_activated(charge_id)
         subscription = await db.get_subscription(message.from_user.id, target_bot_id)
         expires_at = subscription.get("expires_at")
         expiry_text = expires_at.strftime("%d %b %Y, %H:%M") if expires_at else "No expiry"
