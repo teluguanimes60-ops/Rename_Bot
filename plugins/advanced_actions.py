@@ -4,6 +4,7 @@ import os
 import re
 import shutil
 import time
+import tempfile
 
 from pyrogram import Client, StopPropagation, filters
 from pyrogram.types import Message
@@ -89,100 +90,134 @@ async def _cleanup_job(client, job, keep_source=False):
     await jobs.remove(job.job_id)
 
 
+async def _partial_media_probe(client, source, total_size: int) -> str:
+    """Create a small sparse probe from a few Telegram media chunks."""
+    total_size = int(total_size or 0)
+    if total_size <= 0:
+        raise RuntimeError('Telegram did not provide a usable file size.')
+    chunk_size = 1024 * 1024
+    head_bytes = min(4 * chunk_size, total_size)
+    tail_bytes = min(4 * chunk_size, max(0, total_size - head_bytes))
+    path = tempfile.mktemp(prefix='anitoon_probe_', suffix='.media')
+    fd = None
+    try:
+        fd = os.open(path, os.O_RDWR | os.O_CREAT | os.O_TRUNC, 0o600)
+        os.ftruncate(fd, total_size)
+
+        async def fetch(offset_chunk: int, limit_chunks: int, target_offset: int, wanted: int):
+            received = 0
+            async for data in client.stream_media(source, offset=offset_chunk, limit=limit_chunks):
+                if not data:
+                    continue
+                take = min(len(data), max(0, wanted - received))
+                if take <= 0:
+                    break
+                os.pwrite(fd, data[:take], target_offset + received)
+                received += take
+                if received >= wanted:
+                    break
+            return received
+
+        head_chunks = (head_bytes + chunk_size - 1) // chunk_size
+        if await fetch(0, head_chunks, 0, head_bytes) < head_bytes:
+            raise RuntimeError('Could not read the Telegram media header.')
+
+        if tail_bytes > 0:
+            tail_start = max(0, total_size - tail_bytes)
+            tail_chunk = tail_start // chunk_size
+            aligned_start = tail_chunk * chunk_size
+            tail_wanted = total_size - aligned_start
+            tail_chunks = (tail_wanted + chunk_size - 1) // chunk_size
+            await fetch(tail_chunk, tail_chunks, aligned_start, tail_wanted)
+        return path
+    except Exception:
+        try:
+            if fd is not None:
+                os.close(fd)
+        except OSError:
+            pass
+        try:
+            os.remove(path)
+        except OSError:
+            pass
+        raise
+    finally:
+        if fd is not None:
+            try:
+                os.close(fd)
+            except OSError:
+                pass
+
 @Client.on_callback_query(filters.regex(r'^job:advinfo:([0-9a-f]+)$'), group=-4900)
 async def media_info(client, cb):
     job = await _job(cb)
     if not job:
         raise StopPropagation
-    await cb.answer('Reading Telegram media information...')
+    await cb.answer('Reading media information...')
+    probe_path = None
     try:
-        # Read metadata directly from Telegram's Message/Media object.
-        # This deliberately does NOT call download_media(), FFmpeg, or
-        # send_*(), so Media Info is instant and never consumes transfer time.
         source = (job.extra or {}).get('source_message')
         if source is None:
             source = await client.get_messages(job.user_id, job.source_message_id)
         if not source:
             raise RuntimeError('Original Telegram message is no longer available.')
-
-        media = (
-            getattr(source, 'video', None)
-            or getattr(source, 'document', None)
-            or getattr(source, 'audio', None)
-            or getattr(source, 'photo', None)
-        )
+        media = (getattr(source, 'video', None) or getattr(source, 'document', None) or getattr(source, 'audio', None) or getattr(source, 'photo', None))
         if media is None:
             raise RuntimeError('No supported Telegram media was found in the original message.')
 
-        filename = str(
-            getattr(media, 'file_name', None)
-            or job.original_name
-            or f'file_{job.source_message_id}'
-        )
+        filename = str(getattr(media, 'file_name', None) or job.original_name or f'file_{job.source_message_id}')
         size = int(getattr(media, 'file_size', 0) or (job.extra or {}).get('telegram_file_size', 0) or 0)
-        mime = str(getattr(media, 'mime_type', None) or job.mime_type or 'Unknown')
+        duration = int(getattr(media, 'duration', 0) or 0)
+        width = int(getattr(media, 'width', 0) or 0)
+        height = int(getattr(media, 'height', 0) or 0)
 
-        if getattr(source, 'video', None) is not None:
-            media_type = '🎬 Video'
-            width = int(getattr(media, 'width', 0) or 0)
-            height = int(getattr(media, 'height', 0) or 0)
-            duration = int(getattr(media, 'duration', 0) or 0)
-            lines = [
-                'ℹ️ **Media Information**',
-                '',
-                f'📂 **Name:** `{filename}`',
-                f'📦 **Size:** `{humanbytes(size)}`',
-                f'🎞 **Type:** `{media_type}`',
-                f'📐 **Resolution:** `{width} × {height}`' if width and height else '📐 **Resolution:** `Unknown`',
-                f'⏱ **Duration:** `{duration // 60:02d}:{duration % 60:02d}`' if duration else '⏱ **Duration:** `Unknown`',
-                f'🧾 **MIME:** `{mime}`',
-                f'▶️ **Streaming:** `Supported`' if getattr(media, 'supports_streaming', False) else '▶️ **Streaming:** `Not reported`',
-            ]
-        elif getattr(source, 'audio', None) is not None:
-            media_type = '🎵 Audio'
-            duration = int(getattr(media, 'duration', 0) or 0)
-            title = str(getattr(media, 'title', None) or '').strip()
-            performer = str(getattr(media, 'performer', None) or '').strip()
-            lines = [
-                'ℹ️ **Media Information**',
-                '',
-                f'📂 **Name:** `{filename}`',
-                f'📦 **Size:** `{humanbytes(size)}`',
-                f'🎞 **Type:** `{media_type}`',
-                f'⏱ **Duration:** `{duration // 60:02d}:{duration % 60:02d}`' if duration else '⏱ **Duration:** `Unknown`',
-                f'🎼 **Title:** `{title}`' if title else '🎼 **Title:** `Unknown`',
-                f'👤 **Artist:** `{performer}`' if performer else '👤 **Artist:** `Unknown`',
-                f'🧾 **MIME:** `{mime}`',
-            ]
-        elif getattr(source, 'photo', None) is not None:
-            width = int(getattr(media, 'width', 0) or 0)
-            height = int(getattr(media, 'height', 0) or 0)
-            lines = [
-                'ℹ️ **Media Information**',
-                '',
-                f'📂 **Name:** `{filename}`',
-                f'📦 **Size:** `{humanbytes(size)}`' if size else '📦 **Size:** `Telegram photo`',
-                '🎞 **Type:** `🖼 Photo`',
-                f'📐 **Resolution:** `{width} × {height}`' if width and height else '📐 **Resolution:** `Unknown`',
-            ]
-        else:
-            lines = [
-                'ℹ️ **Media Information**',
-                '',
-                f'📂 **Name:** `{filename}`',
-                f'📦 **Size:** `{humanbytes(size)}`',
-                '🎞 **Type:** `📄 Document`',
-                f'🧾 **MIME:** `{mime}`',
-            ]
+        # Sample only a few MiB. A single stream is used to avoid the
+        # AUTH_BYTES_INVALID problem caused by concurrent media sessions.
+        probe_path = await _partial_media_probe(client, source, size)
+        streams = await inspect_media_streams(probe_path)
+        audio = [item for item in streams if item['type'] == 'audio']
+        subtitles = [item for item in streams if item['type'] == 'subtitle']
 
-        # Detailed codec/track analysis requires reading the actual media
-        # container. We do not download it for this lightweight info action.
-        lines.extend(['', '⚡ **Read directly from Telegram — no download/upload used.**'])
-        await cb.message.edit_text('\\n'.join(lines), reply_markup=advanced_menu(job.job_id))
+        media_type = '🎬 Video' if getattr(source, 'video', None) else '🎵 Audio' if getattr(source, 'audio', None) else '🖼 Photo' if getattr(source, 'photo', None) else '📄 Document'
+        lines = [
+            'ℹ️ **Media Information**',
+            '',
+            f'📂 **Name:** `{filename}`',
+            f'📦 **Size:** `{humanbytes(size)}`',
+            f'🎞 **Type:** `{media_type}`',
+        ]
+        if width and height:
+            lines.append(f'📐 **Resolution:** `{width} × {height}`')
+        if duration:
+            lines.append(f'⏱ **Duration:** `{duration // 60:02d}:{duration % 60:02d}`')
+
+        lines.extend(['', f'🎵 **Audio Tracks:** `{len(audio)}`'])
+        for index, item in enumerate(audio, 1):
+            codec = str(item.get('codec') or 'unknown')
+            language = str(item.get('language') or 'und')
+            title = str(item.get('title') or '').strip()
+            extra = f' — {title}' if title else ''
+            lines.append(f'  🎵 A{index}: `{codec}` `{language}`{extra}')
+
+        lines.extend(['', f'💬 **Subtitle Tracks:** `{len(subtitles)}`'])
+        for index, item in enumerate(subtitles, 1):
+            codec = str(item.get('codec') or 'unknown')
+            language = str(item.get('language') or 'und')
+            title = str(item.get('title') or '').strip()
+            extra = f' — {title}' if title else ''
+            lines.append(f'  💬 S{index}: `{codec}` `{language}`{extra}')
+
+        lines.extend(['', '⚡ **Only a small part of the file was sampled; the complete file was not downloaded or uploaded.**'])
+        await cb.message.edit_text('\n'.join(lines), reply_markup=advanced_menu(job.job_id))
     except Exception as exc:
-        await cb.message.edit_text(f'❌ **Media Info failed**\\n\\n`{str(exc)[:1500]}`', reply_markup=advanced_menu(job.job_id))
+        await cb.message.edit_text(f'❌ **Media Info failed**\n\n`{str(exc)[:1500]}`', reply_markup=advanced_menu(job.job_id))
+    finally:
+        if probe_path:
+            try:
+                os.remove(probe_path)
+            except OSError:
+                pass
     raise StopPropagation
-
 @Client.on_callback_query(filters.regex(r'^job:extractaudio:([0-9a-f]+)$'), group=-4900)
 async def extract_audio(client, cb):
     job = await _job(cb)
