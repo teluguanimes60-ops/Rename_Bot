@@ -213,7 +213,7 @@ async def payment_message_handler(client, message):
             existing = await db.get_payment(charge_id)
             if not existing:
                 return await message.reply_text("⚠️ **Payment record could not be found.**\n\nPlease use /paysupport.")
-            if existing.get("activation_status") == "activated":
+            if existing.get("activation_status", "activated") == "activated":
                 return await message.reply_text("ℹ️ **This payment was already processed and your plan is active.**")
         await db.set_plan(
             user_id=message.from_user.id,
