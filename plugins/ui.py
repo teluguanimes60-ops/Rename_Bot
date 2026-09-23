@@ -30,12 +30,12 @@ def settings_menu():
         [InlineKeyboardButton("🖼 Thumbnail", callback_data="settings_thumb")],
         [InlineKeyboardButton("🏷 Metadata", callback_data="metadata_settings"), InlineKeyboardButton("💎 Plan", callback_data="upgrade")],
         [InlineKeyboardButton("🌐 Language", callback_data="language_settings")],
-        [InlineKeyboardButton("🔙 Back", callback_data="start")],
+        [InlineKeyboardButton("🔙 Back", callback_data="home")],
     ])
 
 
 def help_menu():
-    return InlineKeyboardMarkup([[InlineKeyboardButton("⚙️ Settings", callback_data="settings")], [InlineKeyboardButton("🔙 Back", callback_data="start")]])
+    return InlineKeyboardMarkup([[InlineKeyboardButton("⚙️ Settings", callback_data="settings")], [InlineKeyboardButton("🔙 Back", callback_data="home")]])
 
 
 def thumbnail_menu():
