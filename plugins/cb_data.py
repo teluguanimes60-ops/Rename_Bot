@@ -318,7 +318,7 @@ async def cb_about(
                 [
                     InlineKeyboardButton(
                         "🔙 Back",
-                        callback_data="start",
+                        callback_data="home",
                     )
                 ]
             ]
