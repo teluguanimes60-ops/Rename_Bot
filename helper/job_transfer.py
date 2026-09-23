@@ -284,7 +284,17 @@ async def upload_job(client: Client, job: Job, path: str, filename: str, status:
         }
         if as_video:
             from helper.ffmpeg import get_video_info
-            duration, width, height = await get_video_info(upload_path)
+            # Normal rename uploads the original downloaded media. Reuse the
+            # dimensions/duration Telegram already supplied instead of launching
+            # another ffprobe process. Converted/processed outputs still probe
+            # themselves by passing prepared_video=True.
+            cached_duration = float((job.extra or {}).get("duration", 0) or 0)
+            cached_width = int((job.extra or {}).get("source_width", 0) or 0)
+            cached_height = int((job.extra or {}).get("source_height", 0) or 0)
+            if not prepared_video and cached_duration > 0 and cached_width > 0 and cached_height > 0:
+                duration, width, height = cached_duration, cached_width, cached_height
+            else:
+                duration, width, height = await get_video_info(upload_path)
             if duration <= 0 or width <= 0 or height <= 0:
                 raise RuntimeError("Video metadata could not be read before upload")
             set_transfer_runtime(job.job_id, duration)
