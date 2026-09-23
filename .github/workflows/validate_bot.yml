@@ -38,3 +38,4 @@ jobs:
             plugins/advanced_actions.py \
             plugins/start_ui.py \
             helper/advanced_quota.py
+            plugins/support.py
