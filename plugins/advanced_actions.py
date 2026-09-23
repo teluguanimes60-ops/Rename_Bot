@@ -422,6 +422,8 @@ async def receive_added_track(client, message: Message):
             await client.delete_messages(message.chat.id, message.id)
         except Exception:
             pass
+    except StopPropagation:
+        raise
     except AniToonTransferCancelled:
         await message.reply_text('❌ **Advanced operation cancelled.**')
         await _cleanup_job(client, job, keep_source=True)
@@ -478,6 +480,8 @@ async def trim_input(client, message: Message):
             await client.delete_messages(message.chat.id, message.id)
         except Exception:
             pass
+    except StopPropagation:
+        raise
     except AniToonTransferCancelled:
         await message.reply_text('❌ **Trim cancelled.**')
         await _cleanup_job(client, job, keep_source=True)
