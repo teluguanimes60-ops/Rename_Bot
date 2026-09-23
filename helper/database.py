@@ -378,8 +378,25 @@ class Database:
     async def record_payment(self, user_id: int, bot_id: int, plan_key: str, stars: int, charge_id: str) -> bool:
         if await self.payment_exists(charge_id):
             return False
-        await self.payments.insert_one({"user_id": int(user_id), "bot_id": int(bot_id), "plan": plan_key, "stars": int(stars), "charge_id": charge_id, "created_at": datetime.utcnow()})
+        await self.payments.insert_one({
+            "user_id": int(user_id),
+            "bot_id": int(bot_id),
+            "plan": plan_key,
+            "stars": int(stars),
+            "charge_id": str(charge_id),
+            "activation_status": "pending",
+            "created_at": datetime.utcnow(),
+        })
         return True
+
+    async def get_payment(self, charge_id: str):
+        return await self.payments.find_one({"charge_id": str(charge_id)})
+
+    async def mark_payment_activated(self, charge_id: str):
+        await self.payments.update_one(
+            {"charge_id": str(charge_id)},
+            {"$set": {"activation_status": "activated", "activated_at": datetime.utcnow()}},
+        )
     async def ensure_job_indexes(self):
         """Keep recoverable jobs self-cleaning without per-request delete queries."""
         try:
