@@ -272,6 +272,8 @@ async def cb_help(
         "🛠 **AniToon Help & Usage**\n\n"
         "📂 **Rename:** Send a document, video or audio file "
         "and reply with the new filename.\n\n"
+        "🛠 **Advanced:** Each Advanced option has its own daily limit: "
+        "1 use on Free, 10 on 10-Star, 20 on 20-Star, and 30 on 30-Star plans.\n\n"
         "🖼 **Thumbnail:** Send an image to save it as your "
         "custom thumbnail.\n\n"
         "📝 **Caption:** Use `/setcaption` or the Settings menu "
