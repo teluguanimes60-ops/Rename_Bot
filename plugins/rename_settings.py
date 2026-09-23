@@ -81,21 +81,36 @@ async def rename_mode_button(client, cb):
         await cb.answer("Set your permanent message.", show_alert=True)
         prompt = await client.send_message(
             user_id,
-            "🏷 **Set Your Permanent Rename Message**\\n\\n"
-            "Send the permanent message/text you want to add to every renamed file.\\n\\n"
-            "Example:\\n"
-            "\\`{name} - Telugu Anime\\`\\n\\n"
-            "**Available placeholders:**\\n"
-            "\\`{name}\\` — original filename without extension\\n"
-            "\\`{filename}\\` — original full filename\\n"
-            "\\`{ext}\\` — original extension\\n"
-            "\\`{title}\\` — cleaned title\\n"
-            "\\`{season}\\` — detected season\\n"
-            "\\`{episode}\\` — detected episode\\n"
-            "\\`{year}\\` — detected year\\n"
-            "\\`{resolution}\\` — detected resolution\\n"
-            "\\`{language}\\` — detected language",
+            "🏷 **Set Your Permanent Rename Message**\n\n"
+
+            "Send the permanent message/text you want to add to every renamed file.\n\n"
+
+            "📝 **Example:**\n"
+
+            "`{name} - Telugu Anime`\n\n"
+
+            "📌 **Available placeholders:**\n"
+
+            "`{name}` — original filename without extension\n"
+
+            "`{filename}` — original full filename\n"
+
+            "`{ext}` — original extension\n"
+
+            "`{title}` — cleaned title\n"
+
+            "`{season}` — detected season\n"
+
+            "`{episode}` — detected episode\n"
+
+            "`{year}` — detected year\n"
+
+            "`{resolution}` — detected resolution\n"
+
+            "`{language}` — detected language"
+
             reply_markup=ForceReply(selective=True),
+
         )
         await db.col.update_one(
             {"id": user_id},
@@ -120,11 +135,17 @@ async def rename_template_button(client, cb):
     prompt = await client.send_message(
         cb.from_user.id,
         "🏷 **Permanent Rename Text**\n\n"
+
         "Send a template such as:\n"
-        "\`{name} - Telugu Anime\`\n"
-        "\`[AniToon] {name}\`\n\n"
-        "Available: \`{name}\`, \`{filename}\`, \`{ext}\`, \`{title}\`, \`{season}\`, \`{episode}\`, \`{year}\`, \`{resolution}\`, \`{language}\`",
+
+        "`{name} - Telugu Anime`\n"
+
+        "`[AniToon] {name}`\n\n"
+
+        "📌 **Available:** `{name}`, `{filename}`, `{ext}`, `{title}`, `{season}`, `{episode}`, `{year}`, `{resolution}`, `{language}`",
+
         reply_markup=ForceReply(selective=True),
+
     )
     await db.col.update_one(
         {"id": int(cb.from_user.id)},
