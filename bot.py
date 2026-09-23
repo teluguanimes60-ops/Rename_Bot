@@ -105,6 +105,8 @@ BOT_COMMANDS = [
     BotCommand("thumbnail", "Open thumbnail page"),
     BotCommand("plan", "Open plans"),
     BotCommand("language", "Change language"),
+    BotCommand("support", "Contact AniToon owner"),
+    BotCommand("paysupport", "Payment support"),
 ]
 
 
@@ -139,6 +141,7 @@ class Bot(Client):
         """Clean abandoned jobs only after the configured recovery window."""
         try:
             await db.ensure_job_indexes()
+            await db.ensure_support_indexes()
             deleted = await db.cleanup_stale_jobs(days=Config.JOB_RECOVERY_RETENTION_DAYS)
             if deleted:
                 log.info("Removed %s stale job records", deleted)
