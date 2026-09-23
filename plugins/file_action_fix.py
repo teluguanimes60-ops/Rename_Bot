@@ -252,7 +252,7 @@ async def repaired_file_download(client: Client, message: Message):
     job_id = uuid.uuid4().hex[:12]
     work_dir = os.path.join("downloads", str(user_id), job_id)
     os.makedirs(work_dir, exist_ok=True)
-    job = Job(job_id=job_id, user_id=user_id, bot_id=bot_id, source_message_id=message.id, work_dir=work_dir, input_path=os.path.join(work_dir, original_name), original_name=original_name, mime_type=mime_type, extra={"extension": extension, "file_id": getattr(media, "file_id", "") or "", "source_message": message, "user_data": user_data, "used_before": used, "telegram_file_size": expected_size, "duration": duration, "source_media_type": "video" if message.video else ("audio" if message.audio else "document")})
+    job = Job(job_id=job_id, user_id=user_id, bot_id=bot_id, source_message_id=message.id, work_dir=work_dir, input_path=os.path.join(work_dir, original_name), original_name=original_name, mime_type=mime_type, extra={"extension": extension, "file_id": getattr(media, "file_id", "") or "", "source_message": message, "user_data": user_data, "used_before": used, "telegram_file_size": expected_size, "duration": duration, "source_width": int(getattr(media, "width", 0) or 0), "source_height": int(getattr(media, "height", 0) or 0), "source_media_type": "video" if message.video else ("audio" if message.audio else "document")})
     if not await jobs.register(job):
         shutil.rmtree(work_dir, ignore_errors=True)
         await message.reply_text("❌ Could not add this file to the queue.")
