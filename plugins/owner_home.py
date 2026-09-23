@@ -36,6 +36,7 @@ def panel_keyboard():
         ],
         [InlineKeyboardButton("🤖 Bot Details", callback_data="owner:bots")],
         [InlineKeyboardButton("📣 Broadcast", callback_data="owner:broadcast")],
+        [InlineKeyboardButton("📨 User Help Requests", callback_data="owner:support")],
         [InlineKeyboardButton("🔙 Home", callback_data="start")],
     ])
 
