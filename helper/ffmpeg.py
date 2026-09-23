@@ -260,7 +260,7 @@ async def convert_media(input_file, output_file, output_format: str, progress_ca
     if output_format == "mp4": return bool(await prepare_video_for_telegram(input_file, output_file, progress_callback))
     duration = await _duration(input_file)
     if output_format in {"mkv", "mov"}: cmd = ["ffmpeg", "-y", "-i", input_file, "-map", "0", "-c", "copy", "-progress", "pipe:1", "-nostats", output_file]
-    elif output_format == "webm": cmd = ["ffmpeg", "-y", "-i", input_file, "-c:v", "libvpx-vp9", "-deadline", "realtime", "-cpu-used", "4", "-c:a", "libopus", "-progress", "pipe:1", "-nostats", output_file]
+    elif output_format == "webm": cmd = ["ffmpeg", "-y", "-i", input_file, "-c:v", "libvpx-vp9", "-deadline", "realtime", "-cpu-used", "8", "-row-mt", "1", "-c:a", "libopus", "-progress", "pipe:1", "-nostats", output_file]
     elif output_format == "mp3": cmd = ["ffmpeg", "-y", "-i", input_file, "-vn", "-c:a", "libmp3lame", "-q:a", "2", "-progress", "pipe:1", "-nostats", output_file]
     elif output_format == "m4a": cmd = ["ffmpeg", "-y", "-i", input_file, "-vn", "-c:a", "aac", "-b:a", "192k", "-progress", "pipe:1", "-nostats", output_file]
     elif output_format == "aac": cmd = ["ffmpeg", "-y", "-i", input_file, "-vn", "-c:a", "aac", "-b:a", "192k", "-progress", "pipe:1", "-nostats", output_file]
