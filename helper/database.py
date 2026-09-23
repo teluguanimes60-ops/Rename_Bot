@@ -17,6 +17,7 @@ class Database:
         self.col = self.db.user
         self.subscriptions = self.db.subscriptions
         self.usage = self.db.usage
+        self.advanced_usage = self.db.advanced_usage
         self.payments = self.db.payments
         self.clones = self.db.clones
         self.force_sub_requests = self.db.force_sub_requests
@@ -73,6 +74,46 @@ class Database:
     async def update_usage(self, user_id: int, bot_id: int, bytes_count: int):
         today = datetime.utcnow().date().isoformat()
         await self.usage.update_one({"user_id": int(user_id), "bot_id": int(bot_id), "date": today}, {"$inc": {"bytes": int(bytes_count)}}, upsert=True)
+
+    async def get_advanced_usage(self, user_id: int, bot_id: int, feature: str) -> int:
+        today = datetime.utcnow().date().isoformat()
+        record = await self.advanced_usage.find_one({
+            "user_id": int(user_id),
+            "bot_id": int(bot_id),
+            "date": today,
+            "feature": str(feature),
+        })
+        return int(record.get("count", 0)) if record else 0
+
+    async def consume_advanced_usage(self, user_id: int, bot_id: int, feature: str, limit: int) -> int:
+        """Atomically consume one daily advanced-feature use without crossing the limit."""
+        user_id, bot_id, feature, limit = int(user_id), int(bot_id), str(feature), max(1, int(limit))
+        today = datetime.utcnow().date().isoformat()
+        identity = {
+            "user_id": user_id,
+            "bot_id": bot_id,
+            "date": today,
+            "feature": feature,
+        }
+
+        # Ensure the daily feature document exists. This is intentionally
+        # separate from the increment so concurrent first-use requests cannot
+        # create duplicate usage documents.
+        await self.advanced_usage.update_one(
+            identity,
+            {"$setOnInsert": {**identity, "count": 0, "created_at": datetime.utcnow()}},
+            upsert=True,
+        )
+
+        result = await self.advanced_usage.update_one(
+            {**identity, "count": {"$lt": limit}},
+            {"$inc": {"count": 1}},
+        )
+        if not result.modified_count:
+            return 0
+
+        record = await self.advanced_usage.find_one(identity, {"count": 1})
+        return int(record.get("count", 0)) if record else 0
 
     async def mark_force_sub_request(self, user_id: int, chat_id: int):
         await self.force_sub_requests.update_one({"user_id": int(user_id), "chat_id": int(chat_id)}, {"$set": {"user_id": int(user_id), "chat_id": int(chat_id), "requested_at": datetime.utcnow()}}, upsert=True)
