@@ -51,7 +51,7 @@ def owner_panel_markup() -> InlineKeyboardMarkup:
         ],
         [InlineKeyboardButton("🤖 Bot Details", callback_data="owner:bots")],
         [InlineKeyboardButton("📣 Broadcast", callback_data="owner:broadcast")],
-        [InlineKeyboardButton("🖼 Remove Paid Stars Photo", callback_data="owner:paid_photo")],
+        [InlineKeyboardButton("📨 User Help Requests", callback_data="owner:support")],        [InlineKeyboardButton("🖼 Remove Paid Stars Photo", callback_data="owner:paid_photo")],
         [InlineKeyboardButton("🔙 Home", callback_data="start")],
     ])
 
