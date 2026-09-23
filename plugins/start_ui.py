@@ -23,6 +23,34 @@ async def _require_force_sub(client, user_id: int, message=None) -> bool:
     return True
 
 
+async def build_home_text(client, user) -> str:
+    """Build the canonical Home text from the live user's subscription/usage."""
+    user_id = int(user.id)
+    bot_id = int(getattr(client, "bot_id", 0) or 0)
+    if bot_id <= 0:
+        try:
+            bot_id = int((await client.get_me()).id)
+            try:
+                client.bot_id = bot_id
+            except Exception:
+                pass
+        except Exception:
+            bot_id = 0
+
+    await db.add_user(user_id)
+    subscription = await db.get_subscription(user_id, bot_id)
+    plan = get_plan(subscription.get("plan", "free"))
+    used = await db.get_usage(user_id, bot_id)
+    remaining = max(plan.daily_limit - used, 0)
+    return (
+        "🔥 **Welcome to AniToon Bot** 🔥\n\n"
+        f"👋 Hello **{user.first_name}**!\n\n"
+        f"💎 **Plan:** {plan.name}\n"
+        f"📊 **Used today:** `{humanbytes(used)}`\n"
+        f"📦 **Remaining:** `{humanbytes(remaining)}`\n\n"
+        "⚡ Fast processing • Clean filenames • Advanced media tools"
+    )
+
 @Client.on_message(filters.private & filters.command("start"), group=-200)
 async def clean_start(client, message):
     user_id = message.from_user.id
@@ -94,18 +122,10 @@ async def start_convert_action(client, callback_query):
     raise StopPropagation
 
 
-@Client.on_callback_query(filters.regex(r"^start$"), group=-200)
+@Client.on_callback_query(filters.regex(r"^(start|home)$"), group=-200)
 async def start_from_button(client, callback_query):
     await callback_query.answer()
     user = callback_query.from_user
-    bot_id = int(getattr(client, "bot_id", 0) or 0)
-    if bot_id <= 0:
-        me = await client.get_me()
-        bot_id = int(me.id)
-        try:
-            client.bot_id = bot_id
-        except Exception:
-            pass
     try:
         if not await _require_force_sub(client, user.id, callback_query.message):
             raise StopPropagation
@@ -114,41 +134,34 @@ async def start_from_button(client, callback_query):
     except Exception:
         await callback_query.message.reply_text("⚠️ **Channel verification failed.** Please try again.")
         raise StopPropagation
-    plan_name, used, remaining = "🆓 Free", 0, 10 * 1024 * 1024 * 1024
-    try:
-        await db.add_user(user.id)
-    except Exception:
-        pass
 
-    # Use the live Telegram bot ID for the same subscription/usage records
-    # used by /start. Never let a missing in-memory ID turn a paid user into Free.
     try:
-        subscription = await db.get_subscription(user.id, bot_id)
-        plan = get_plan(subscription.get("plan", "free"))
-        used = await db.get_usage(user.id, bot_id)
-        plan_name = plan.name
-        remaining = max(plan.daily_limit - used, 0)
+        text = await build_home_text(client, user)
+    except Exception:
+        # Keep the same home fallback only for a genuine database/Telegram
+        # failure; do not use a false Free/0 B value when data is available.
+        text = (
+            "🔥 **Welcome to AniToon Bot** 🔥\n\n"
+            f"👋 Hello **{user.first_name}**!\n\n"
+            "💎 **Plan:** 🆓 Free\n"
+            "📊 **Used today:** `0 B`\n"
+            "📦 **Remaining:** `10.00 GB`\n\n"
+            "⚡ Fast processing • Clean filenames • Advanced media tools"
+        )
+    try:
+        await callback_query.message.edit_text(
+            text,
+            reply_markup=main_menu(getattr(client, "is_main_bot", False)),
+        )
     except Exception:
         try:
-            me = await client.get_me()
-            live_bot_id = int(me.id)
-            try:
-                client.bot_id = live_bot_id
-            except Exception:
-                pass
-            subscription = await db.get_subscription(user.id, live_bot_id)
-            plan = get_plan(subscription.get("plan", "free"))
-            used = await db.get_usage(user.id, live_bot_id)
-            plan_name = plan.name
-            remaining = max(plan.daily_limit - used, 0)
+            sent = await callback_query.message.reply_text(
+                text,
+                reply_markup=main_menu(getattr(client, "is_main_bot", False)),
+            )
+            await protect_start_page(sent)
         except Exception:
             pass
-    text = "🔥 **Welcome to AniToon Bot** 🔥\n\n" f"👋 Hello **{user.first_name}**!\n\n" f"💎 **Plan:** {plan_name}\n" f"📊 **Used today:** `{humanbytes(used)}`\n" f"📦 **Remaining:** `{humanbytes(remaining)}`\n\n" "⚡ Fast processing • Clean filenames • Advanced media tools"
-    try:
-        await callback_query.message.edit_text(text, reply_markup=main_menu(getattr(client, "is_main_bot", False)))
-    except Exception:
-        sent = await callback_query.message.reply_text(text, reply_markup=main_menu(getattr(client, "is_main_bot", False)))
-        await protect_start_page(sent)
     else:
         await protect_start_page(callback_query.message)
     raise StopPropagation
