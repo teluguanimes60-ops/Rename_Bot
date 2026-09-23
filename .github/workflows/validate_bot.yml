@@ -34,4 +34,7 @@ jobs:
             helper/ffmpeg.py \
             plugins/start.py \
             plugins/premium.py \
-            plugins/rename.py
+            plugins/rename.py \
+            plugins/advanced_actions.py \
+            plugins/start_ui.py \
+            helper/advanced_quota.py
