@@ -14,12 +14,56 @@ from helper.job_state import jobs
 from helper.job_transfer import cancel_markup, download_job
 from helper.utils import AniToonTransferCancelled, clear_transfer_cancel, progress_for_pyrogram
 from plugins.ui import advanced_menu
+from helper.advanced_quota import advanced_quota_status, consume_advanced_use, feature_label
 
 
 def _safe(value: str) -> str:
     value = re.sub(r'[\\/:*?"<>|\x00-\x1f]', '_', (value or '').strip())
     return value[:220] or 'output'
 
+
+
+
+async def _advanced_status(job, feature: str):
+    return await advanced_quota_status(job.user_id, job.bot_id, feature)
+
+
+async def _require_advanced_use(job, feature: str, message) -> bool:
+    allowed, _used, _limit = await consume_advanced_use(job.user_id, job.bot_id, feature)
+    if allowed:
+        return True
+    used, limit, plan_name = await _advanced_status(job, feature)
+    label = feature_label(feature)
+    try:
+        await message.edit_text(
+            "🚫 **Daily Advanced Limit Reached**\n\n"
+            f"🛠 **Option:** {label}\n"
+            f"💎 **Plan:** {plan_name}\n"
+            f"📊 **Used today:** `{used}/{limit}`\n\n"
+            "This advanced option is available again after the daily reset.\n"
+            "💎 Upgrade your plan for a higher daily Advanced limit.",
+            reply_markup=advanced_menu(job.job_id),
+        )
+    except Exception:
+        pass
+    return False
+
+
+async def _show_advanced_limit_alert(job, feature: str, message) -> bool:
+    used, limit, plan_name = await _advanced_status(job, feature)
+    if used < limit:
+        return True
+    label = feature_label(feature)
+    await message.edit_text(
+        "🚫 **Daily Advanced Limit Reached**\n\n"
+        f"🛠 **Option:** {label}\n"
+        f"💎 **Plan:** {plan_name}\n"
+        f"📊 **Used today:** `{used}/{limit}`\n\n"
+        "This advanced option is available again after the daily reset.\n"
+        "💎 Upgrade your plan for a higher daily Advanced limit.",
+        reply_markup=advanced_menu(job.job_id),
+    )
+    return False
 
 async def _job(cb):
     job = await jobs.get(cb.matches[0].group(1))
@@ -154,6 +198,8 @@ async def media_info(client, cb):
     if not job:
         raise StopPropagation
     await cb.answer('Reading media information...')
+    if not await _require_advanced_use(job, 'media_info', cb.message):
+        raise StopPropagation
     probe_path = None
     try:
         source = (job.extra or {}).get('source_message')
@@ -224,6 +270,8 @@ async def extract_audio(client, cb):
     if not job:
         raise StopPropagation
     await cb.answer('Extracting audio...')
+    if not await _require_advanced_use(job, 'extract_audio', cb.message):
+        raise StopPropagation
     try:
         await _ensure_downloaded(client, job, cb.message)
         streams = [x for x in await inspect_media_streams(job.input_path) if x['type'] == 'audio']
@@ -265,6 +313,8 @@ async def extract_subtitles(client, cb):
     if not job:
         raise StopPropagation
     await cb.answer('Extracting subtitles...')
+    if not await _require_advanced_use(job, 'extract_subtitle', cb.message):
+        raise StopPropagation
     try:
         await _ensure_downloaded(client, job, cb.message)
         streams = [x for x in await inspect_media_streams(job.input_path) if x['type'] == 'subtitle']
@@ -303,6 +353,8 @@ async def ask_audio(client, cb):
     if not job:
         raise StopPropagation
     await cb.answer()
+    if not await _show_advanced_limit_alert(job, 'add_audio', cb.message):
+        raise StopPropagation
     await jobs.update(job.job_id, selected_action='advanced_add_audio')
     await cb.message.edit_text('➕ **Add Audio**\n\nSend the audio file now.', reply_markup=cancel_markup(job.job_id))
     raise StopPropagation
@@ -314,6 +366,8 @@ async def ask_subtitle(client, cb):
     if not job:
         raise StopPropagation
     await cb.answer()
+    if not await _show_advanced_limit_alert(job, 'add_subtitle', cb.message):
+        raise StopPropagation
     await jobs.update(job.job_id, selected_action='advanced_add_subtitle')
     await cb.message.edit_text('➕ **Add Subtitle**\n\nSend the subtitle file now.', reply_markup=cancel_markup(job.job_id))
     raise StopPropagation
@@ -329,6 +383,9 @@ async def receive_added_track(client, message: Message):
         return
     try:
         await _ensure_downloaded(client, job, message)
+        feature = 'add_audio' if job.selected_action == 'advanced_add_audio' else 'add_subtitle'
+        if not await _require_advanced_use(job, feature, message):
+            raise StopPropagation
         added = await client.download_media(message, file_name=os.path.join(job.work_dir, 'added_track'))
         if not added or not os.path.isfile(added):
             raise RuntimeError('Could not download the additional track.')
@@ -394,6 +451,8 @@ async def trim_input(client, message: Message):
         if start_s < 0 or end_s <= start_s:
             raise ValueError('End time must be greater than start time.')
         await _ensure_downloaded(client, job, message)
+        if not await _require_advanced_use(job, 'trim', message):
+            raise StopPropagation
         base = _safe(os.path.splitext(job.original_name)[0])
         out = os.path.join(job.work_dir, f'{base}_trimmed.mp4')
         await _run_ffmpeg(
