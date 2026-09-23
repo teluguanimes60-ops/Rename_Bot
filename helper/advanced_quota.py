@@ -27,6 +27,15 @@ def plan_advanced_limit(plan_key: str) -> int:
     return max(1, int(plan.stars or 0))
 
 
+async def advanced_quota_status(user_id: int, bot_id: int, feature: str) -> tuple[int, int, str]:
+    """Return today's usage, limit, and plan name without consuming a use."""
+    subscription = await db.get_subscription(int(user_id), int(bot_id))
+    plan = get_plan(subscription.get("plan", "free"))
+    limit = plan_advanced_limit(plan.key)
+    used = await db.get_advanced_usage(int(user_id), int(bot_id), str(feature))
+    return int(used), int(limit), str(plan.name)
+
+
 async def consume_advanced_use(user_id: int, bot_id: int, feature: str) -> tuple[bool, int, int]:
     """Atomically consume one daily use for one advanced feature."""
     subscription = await db.get_subscription(int(user_id), int(bot_id))
