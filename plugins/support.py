@@ -35,11 +35,11 @@ def _request_buttons(request_id: str):
 def _request_text(request: dict) -> str:
     username = "@{}".format(request.get("username")) if request.get("username") else "No username"
     return (
-        f"📨 **User Help Request #{request.get('request_id', '-')}**\\n\\n"
-        f"👤 **User:** {request.get('user_name') or 'Unknown'}\\n"
+        f"📨 **User Help Request #{request.get('request_id', '-')}**\n\n"
+        f"👤 **User:** {request.get('user_name') or 'Unknown'}\n"
         f"🔗 **Username:** {username}\n"
-        f"🆔 **User ID:** `{request.get('user_id', '-')}`\\n"
-        f"🤖 **Bot ID:** `{request.get('bot_id', '-')}`\\n\\n"
+        f"🆔 **User ID:** `{request.get('user_id', '-')}`\n"
+        f"🤖 **Bot ID:** `{request.get('bot_id', '-')}`\n\n"
         "💬 **Problem:**\n"
         f"{request.get('message') or '(empty)'}"
     )
@@ -140,7 +140,7 @@ async def receive_user_support(client, message: Message):
     if owner_id > 0:
         await client.send_message(
             owner_id,
-            f"💬 **New reply from User #{existing['request_id']}**\\n\\n{text[:4000]}",
+            f"💬 **New reply from User #{existing['request_id']}**\n\n{text[:4000]}",
             reply_markup=_request_buttons(existing["request_id"]),
         )
     await message.reply_text("✅ **Your message was sent to the owner.**")
@@ -244,7 +244,7 @@ async def receive_owner_support_reply(client, message: Message):
     try:
         sent = await client.send_message(
             user_id,
-            f"👤 **Owner Reply — Request #{request['request_id']}**\\n\\n{text[:4000]}\\n\\n↩️ Reply to this message to continue the conversation.",
+            f"👤 **Owner Reply — Request #{request['request_id']}**\n\n{text[:4000]}\n\n↩️ Reply to this message to continue the conversation.",
             reply_markup=ForceReply(selective=True),
         )
     except Exception as exc:
