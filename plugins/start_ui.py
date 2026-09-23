@@ -98,7 +98,14 @@ async def start_convert_action(client, callback_query):
 async def start_from_button(client, callback_query):
     await callback_query.answer()
     user = callback_query.from_user
-    bot_id = int(getattr(client, "bot_id", 0))
+    bot_id = int(getattr(client, "bot_id", 0) or 0)
+    if bot_id <= 0:
+        me = await client.get_me()
+        bot_id = int(me.id)
+        try:
+            client.bot_id = bot_id
+        except Exception:
+            pass
     try:
         if not await _require_force_sub(client, user.id, callback_query.message):
             raise StopPropagation
