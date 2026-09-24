@@ -66,7 +66,7 @@ class Config:
     # PYROGRAM
     # =========================
 
-    PYROGRAM_WORKERS = max(8, int(os.getenv("PYROGRAM_WORKERS", "16")))
+    PYROGRAM_WORKERS = max(8, min(64, int(os.getenv("PYROGRAM_WORKERS", "32"))))
 
 
     # =========================
@@ -81,11 +81,11 @@ class Config:
     # Telegram can serve independent file ranges concurrently. Keep this
     # higher than the job limit so one large download can use parallel ranges
     # without allowing unlimited user jobs to run at the same time.
-    MAX_CONCURRENT_TRANSMISSIONS = max(1, int(os.getenv("MAX_CONCURRENT_TRANSMISSIONS", "8")))
+    MAX_CONCURRENT_TRANSMISSIONS = max(1, min(24, int(os.getenv("MAX_CONCURRENT_TRANSMISSIONS", "16"))))
 
     # Turbo download settings. Pyrofork's stream_media() exposes 1 MiB chunks,
     # so large files are split across several independent Telegram requests.
-    DOWNLOAD_PARALLEL_WORKERS = max(2, min(8, int(os.getenv("DOWNLOAD_PARALLEL_WORKERS", "8"))))
+    DOWNLOAD_PARALLEL_WORKERS = max(2, min(16, int(os.getenv("DOWNLOAD_PARALLEL_WORKERS", "12"))))
     DOWNLOAD_PARALLEL_THRESHOLD_MB = max(1, int(os.getenv("DOWNLOAD_PARALLEL_THRESHOLD_MB", "8")))
 
     MAX_CONCURRENT_PROCESSING = max(1, int(os.getenv("MAX_CONCURRENT_PROCESSING", "2")))
@@ -199,11 +199,13 @@ class Config:
 
     OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "").strip()
     OPENAI_RENAME_MODEL = os.getenv("OPENAI_RENAME_MODEL", "gpt-5.6-sol").strip() or "gpt-5.6-sol"
-    MAX_FILE_SIZE_BYTES = (
-        2
-        * 1024
-        * 1024
-        * 1024
+    # Accept files up to 4 GiB at the application layer. Telegram/Pyrofork
+    # still impose their own per-file transport limits, so files that cannot
+    # be received as one Telegram media object are rejected by Telegram before
+    # our splitter can run.
+    MAX_FILE_SIZE_BYTES = max(
+        1,
+        int(os.getenv("MAX_FILE_SIZE_BYTES", str(4 * 1024 * 1024 * 1024))),
     )
 
 
