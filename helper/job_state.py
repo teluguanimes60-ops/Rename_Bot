@@ -125,30 +125,56 @@ class JobManager:
             await db.delete_job(job_id)
 
     async def restore_from_db(self, bot_id: int) -> list[Job]:
+        """Restore unfinished jobs from MongoDB without duplicating in-memory jobs.
+
+        A restored job is returned for automatic recovery when it contains
+        enough information to resume. Jobs that are already actively
+        processing in this process are left alone.
+        """
         records = await db.get_pending_jobs(int(bot_id))
         restored = []
         async with self._lock:
             for item in records:
+                job_id = str(item.get("job_id") or "")
+                if not job_id:
+                    continue
+
+                existing = self._jobs.get(job_id)
+                if existing is not None and existing.extra.get("processing"):
+                    continue
+
                 job = Job(
-                    job_id=str(item["job_id"]), user_id=int(item["user_id"]), bot_id=int(item["bot_id"]),
+                    job_id=job_id,
+                    user_id=int(item["user_id"]),
+                    bot_id=int(item["bot_id"]),
                     source_message_id=int(item.get("source_message_id", 0) or 0),
-                    work_dir=str(item.get("work_dir") or ""), input_path=str(item.get("input_path") or ""),
-                    original_name=str(item.get("original_name") or "file"), mime_type=item.get("mime_type"),
-                    detected_name=item.get("detected_name"), selected_action=item.get("selected_action"),
-                    output_ext=item.get("output_ext"), active=bool(item.get("active", True)),
-                    queued_at=float(item.get("queued_at", time.time())), created_at=float(item.get("created_at", time.time())),
+                    work_dir=str(item.get("work_dir") or ""),
+                    input_path=str(item.get("input_path") or ""),
+                    original_name=str(item.get("original_name") or "file"),
+                    mime_type=item.get("mime_type"),
+                    detected_name=item.get("detected_name"),
+                    selected_action=item.get("selected_action"),
+                    output_ext=item.get("output_ext"),
+                    active=bool(item.get("active", True)),
+                    queued_at=float(item.get("queued_at", time.time())),
+                    created_at=float(item.get("created_at", time.time())),
                     extra=dict(item.get("extra") or {}),
                 )
                 job.extra.pop("source_message", None)
                 job.extra.pop("user_data", None)
                 job.extra["processing"] = False
                 job.extra["state"] = "queued"
+
                 self._jobs[job.job_id] = job
-                self._user_jobs.setdefault(job.user_id, []).append(job.job_id)
+                self._user_jobs.setdefault(job.user_id, [])
+                if job.job_id not in self._user_jobs[job.user_id]:
+                    self._user_jobs[job.user_id].append(job.job_id)
                 self._user_locks.setdefault(job.user_id, asyncio.Lock())
                 restored.append(job)
+
             for ids in self._user_jobs.values():
                 ids.sort(key=lambda jid: self._jobs[jid].queued_at)
+
         return sorted(restored, key=lambda item: item.queued_at)
 
     async def position(self, job_id: str) -> int:
