@@ -245,11 +245,22 @@ async def process_custom_name_job(client, message, job, name: str):
         job.extra["processing"] = False
         job.extra["resume_pending"] = True
         job.extra["resume_in_progress"] = False
-        job.extra["state"] = "queued"
+        job.extra["state"] = "paused" if job.extra.get("paused") else "queued"
         await jobs.update(job.job_id, extra=job.extra)
         try:
-            await status.edit_text("⏸️ **Processing paused by bot restart.**\n\n"
-                                   "Your file is saved and will resume automatically when AniToon is back online.")
+            if job.extra.get("paused"):
+                await status.edit_text(
+                    "⏸️ **Download paused.**\n\nPress **▶️ Resume** to continue.",
+                    reply_markup=InlineKeyboardMarkup([[
+                        InlineKeyboardButton("▶️ Resume", callback_data=f"transfer:resume:{job.job_id}"),
+                        InlineKeyboardButton("❌ Cancel", callback_data=f"transfer:cancel:{job.job_id}"),
+                    ]]),
+                )
+            else:
+                await status.edit_text(
+                    "⏸️ **Processing paused by bot restart.**\n\n"
+                    "Your file is saved and will resume automatically when AniToon is back online."
+                )
         except Exception:
             pass
         raise
@@ -257,7 +268,7 @@ async def process_custom_name_job(client, message, job, name: str):
         job.extra["processing"] = False
         job.extra["resume_pending"] = True
         job.extra["resume_in_progress"] = False
-        job.extra["state"] = "queued"
+        job.extra["state"] = "paused" if job.extra.get("paused") else "queued"
         job.extra["last_error"] = str(exc)[:1000]
         await jobs.update(job.job_id, extra=job.extra)
         try:
