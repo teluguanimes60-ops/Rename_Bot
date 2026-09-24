@@ -257,6 +257,7 @@ class Bot(Client):
             if job.selected_action in {"custom_name", "convert_name"}
             and job.extra.get("name_submitted")
             and not job.extra.get("resume_in_progress")
+            and not job.extra.get("paused")
         ]
         if not resumable:
             return
