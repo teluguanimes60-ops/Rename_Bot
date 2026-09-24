@@ -152,14 +152,19 @@ async def run_name_job_serialized(client, message, job, processor):
 
 
 async def process_custom_name_job(client, message, job, name: str):
-    """Process a rename job without changing the source video media data."""
-    await jobs.update(job.job_id, extra={**job.extra, "processing": True, "state": "processing"})
+    """Process a rename job and keep its DB record when an interruption occurs."""
+    await jobs.update(
+        job.job_id,
+        extra={**job.extra, "processing": True, "state": "processing", "resume_pending": False},
+    )
+    completed = False
+    user_cancelled = False
+
     source_ext = _extension(job.original_name)
     video_mode = (job.extra or {}).get("rename_output_mode") == "video"
 
     safe_name = _safe_filename(name)
     if video_mode:
-        # Normal rename never re-encodes or remuxes the source.
         safe_name = (
             f"{_base_without_extension(safe_name)}.{source_ext}"
             if source_ext
@@ -178,14 +183,10 @@ async def process_custom_name_job(client, message, job, name: str):
         int((job.extra or {}).get("telegram_file_size", 0) or 0),
     )
     try:
-        # _new_transfer_status already shows the download stage at 0%.
-        # Start the activity write in parallel so MongoDB latency is hidden
-        # behind the Telegram download.
         async def _log_activity_safely():
             try:
                 await _log_rename_activity(job, safe_name)
             except Exception:
-                # Activity logging must never block or break the file transfer.
                 pass
 
         activity_task = asyncio.create_task(_log_activity_safely())
@@ -194,8 +195,6 @@ async def process_custom_name_job(client, message, job, name: str):
         output_path = os.path.join(job.work_dir, safe_name)
         os.replace(job.input_path, output_path)
 
-        # MP4 is sent as a native Telegram video; other containers remain
-        # untouched and are uploaded using Telegram's document message.
         results = await _deliver_output(
             client,
             job,
@@ -207,12 +206,24 @@ async def process_custom_name_job(client, message, job, name: str):
         if not results:
             raise RuntimeError("Telegram returned no uploaded result")
 
-        # Logging is best-effort and deliberately happens after upload so
-        # MongoDB latency can never make the transfer appear stuck at 100%.
         try:
             await activity_task
         except Exception:
             pass
+
+        # Mark the delivery complete before cleanup so a restart does not
+        # upload the same successfully delivered file again.
+        await jobs.update(
+            job.job_id,
+            extra={
+                **job.extra,
+                "processing": False,
+                "resume_pending": False,
+                "state": "completed",
+                "delivery_complete": True,
+                "completed_name": safe_name,
+            },
+        )
 
         size = int(
             (job.extra or {}).get("downloaded_size", 0)
@@ -222,27 +233,43 @@ async def process_custom_name_job(client, message, job, name: str):
         await mark_rename_completed(job.job_id)
         await send_completion_notice(client, job.user_id, results=results, parts=len(results))
         await _finish_delivery(client, message, job, status)
+        completed = True
         return results
     except AniToonTransferCancelled:
+        user_cancelled = True
         try:
             await status.edit_text("❌ **Processing cancelled.**")
         except Exception:
             pass
     except asyncio.CancelledError:
+        job.extra["processing"] = False
+        job.extra["resume_pending"] = True
+        job.extra["state"] = "queued"
+        await jobs.update(job.job_id, extra=job.extra)
         try:
-            await status.edit_text("❌ **Processing cancelled.**")
+            await status.edit_text("⏸️ **Processing paused by bot restart.**\n\n"
+                                   "Your file is saved and will resume automatically when AniToon is back online.")
         except Exception:
             pass
         raise
     except Exception as exc:
+        job.extra["processing"] = False
+        job.extra["resume_pending"] = True
+        job.extra["state"] = "queued"
+        job.extra["last_error"] = str(exc)[:1000]
+        await jobs.update(job.job_id, extra=job.extra)
         try:
-            await status.edit_text(f"❌ **Rename failed**\n\n`{str(exc)[:1000]}`")
+            await status.edit_text(
+                "⏸️ **Processing paused.**\n\n"
+                "Your file job has been saved and will retry automatically after the bot reconnects."
+            )
         except Exception:
             pass
     finally:
         clear_transfer_cancel(job.job_id)
-        shutil.rmtree(job.work_dir, ignore_errors=True)
-        await jobs.remove(job.job_id)
+        if completed or user_cancelled:
+            shutil.rmtree(job.work_dir, ignore_errors=True)
+            await jobs.remove(job.job_id)
 
 async def _process_named_job(client, message, job):
     action = job.selected_action
