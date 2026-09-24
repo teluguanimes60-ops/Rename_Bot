@@ -244,6 +244,7 @@ async def process_custom_name_job(client, message, job, name: str):
     except asyncio.CancelledError:
         job.extra["processing"] = False
         job.extra["resume_pending"] = True
+        job.extra["resume_in_progress"] = False
         job.extra["state"] = "queued"
         await jobs.update(job.job_id, extra=job.extra)
         try:
@@ -255,6 +256,7 @@ async def process_custom_name_job(client, message, job, name: str):
     except Exception as exc:
         job.extra["processing"] = False
         job.extra["resume_pending"] = True
+        job.extra["resume_in_progress"] = False
         job.extra["state"] = "queued"
         job.extra["last_error"] = str(exc)[:1000]
         await jobs.update(job.job_id, extra=job.extra)
@@ -288,6 +290,7 @@ async def process_convert_name_job(client, message, job, name: str):
             "processing": True,
             "state": "processing",
             "resume_pending": False,
+            "resume_in_progress": job.extra.get("resume_in_progress", False),
             "name_submitted": True,
             "submitted_name": safe_name,
         },
@@ -308,6 +311,10 @@ async def process_convert_name_job(client, message, job, name: str):
 
         from plugins.rename import _finish_job
         await _finish_job(client, message, job, output_path, safe_name)
+        current = await jobs.get(job.job_id)
+        if current is not None:
+            current.extra["resume_in_progress"] = False
+            await jobs.update(job.job_id, extra=current.extra)
     except AniToonTransferCancelled:
         try:
             await status.edit_text("❌ **Processing cancelled.**")
@@ -318,6 +325,7 @@ async def process_convert_name_job(client, message, job, name: str):
     except asyncio.CancelledError:
         job.extra["processing"] = False
         job.extra["resume_pending"] = True
+        job.extra["resume_in_progress"] = False
         job.extra["state"] = "queued"
         await jobs.update(job.job_id, extra=job.extra)
         try:
@@ -331,6 +339,7 @@ async def process_convert_name_job(client, message, job, name: str):
     except Exception as exc:
         job.extra["processing"] = False
         job.extra["resume_pending"] = True
+        job.extra["resume_in_progress"] = False
         job.extra["state"] = "queued"
         job.extra["last_error"] = str(exc)[:1000]
         await jobs.update(job.job_id, extra=job.extra)
@@ -341,7 +350,6 @@ async def process_convert_name_job(client, message, job, name: str):
             )
         except Exception:
             pass
-
 
 async def _process_named_job(client, message, job):
     action = job.selected_action
