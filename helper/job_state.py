@@ -163,6 +163,8 @@ class JobManager:
                 job.extra.pop("source_message", None)
                 job.extra.pop("user_data", None)
                 job.extra["processing"] = False
+                job.extra["resume_in_progress"] = False
+                job.extra["resume_pending"] = True
                 job.extra["state"] = "queued"
 
                 self._jobs[job.job_id] = job
