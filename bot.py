@@ -2,7 +2,6 @@ import asyncio
 import logging
 import os
 import shutil
-import time
 
 from pyrogram import Client
 from pyrogram.errors import FloodWait
@@ -279,8 +278,6 @@ class Bot(Client):
             asyncio.create_task(self._resume_one_job(job))
 
     async def _resume_one_job(self, job):
-        from plugins.rename_reply_responder import process_custom_name_job
-
         try:
             shutil.rmtree(job.work_dir, ignore_errors=True)
             os.makedirs(job.work_dir, exist_ok=True)
@@ -297,6 +294,7 @@ class Bot(Client):
                 )
 
             if job.selected_action == "custom_name":
+                from plugins.rename_reply_responder import process_custom_name_job
                 name = str(
                     job.extra.get("submitted_name")
                     or job.extra.get("auto_name")
@@ -308,31 +306,14 @@ class Bot(Client):
                 return
 
             if job.selected_action == "convert_name":
-                from helper.ffmpeg import convert_media
-                from helper.job_transfer import download_job
-                from plugins.rename import _base_without_extension, _extension, _safe_filename, _finish_job
+                from plugins.rename_reply_responder import process_convert_name_job
+                name = str(job.extra.get("submitted_name") or "").strip()
+                if not name:
+                    raise RuntimeError("Saved conversion output name is missing")
+                await process_convert_name_job(self, source, job, name)
+                return
 
-                ext = str(job.output_ext or "").strip().lower()
-                if not ext:
-                    raise RuntimeError("Saved conversion format is missing")
-
-                raw_name = str(job.extra.get("submitted_name") or "file").strip()
-                name = _safe_filename(raw_name)
-                if _extension(name) != ext:
-                    name = f"{_base_without_extension(name)}.{ext}"
-
-                status = await self.send_message(
-                    job.user_id,
-                    f"🔄 **Restoring conversion to {ext.upper()}...**\n\n"
-                    "Please wait while the file is downloaded again and processed.",
-                )
-                await download_job(self, source, job, status)
-
-                output_path = os.path.join(job.work_dir, name)
-                if not await convert_media(job.input_path, output_path, ext):
-                    raise RuntimeError("FFmpeg conversion failed during recovery")
-
-                await _finish_job(self, status, job, output_path, name)
+            raise RuntimeError(f"Unsupported recovery action: {job.selected_action}")
         except asyncio.CancelledError:
             job.extra["processing"] = False
             job.extra["resume_in_progress"] = False
@@ -345,6 +326,7 @@ class Bot(Client):
             job.extra["state"] = "queued"
             await jobs.update(job.job_id, extra=job.extra)
             log.exception("Could not resume job %s", job.job_id)
+
     async def start(self):
         while True:
             try:
