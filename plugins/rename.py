@@ -70,9 +70,8 @@ def _media_from_message(message: Message):
 
 
 async def _user_context(user_id: int, bot_id: int):
-    await db.add_user(user_id)
     user, sub, used = await asyncio.gather(
-        db.get_user_data(user_id),
+        db.get_or_create_user(user_id),
         db.get_subscription(user_id, bot_id),
         db.get_usage(user_id, bot_id),
     )
