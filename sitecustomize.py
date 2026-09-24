@@ -28,7 +28,7 @@ def _patch_pyrogram_transmissions():
     def fast_init(self, *args, **kwargs):
         kwargs.setdefault(
             "max_concurrent_transmissions",
-            max(1, int(os.getenv("MAX_CONCURRENT_TRANSMISSIONS", "4"))),
+            max(1, int(os.getenv("MAX_CONCURRENT_TRANSMISSIONS", "16"))),
         )
         return original_init(self, *args, **kwargs)
 
