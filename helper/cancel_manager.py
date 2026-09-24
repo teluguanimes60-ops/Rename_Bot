@@ -43,3 +43,10 @@ async def cancel_job_tasks(job_id: str) -> int:
         task.cancel()
         count += 1
     return count
+
+
+async def has_active_tasks(job_id: str) -> bool:
+    if not job_id:
+        return False
+    async with _lock:
+        return any(not task.done() for task in _tasks.get(str(job_id), set()))
