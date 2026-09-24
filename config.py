@@ -29,6 +29,12 @@ class Config:
         or ""
     ).strip()
 
+    # MongoDB pool tuning. These are intentionally conservative so the bot
+    # stays responsive on both Render and a local Chromebook.
+    DB_MAX_POOL_SIZE = max(10, min(100, int(os.getenv("DB_MAX_POOL_SIZE", "50"))))
+    DB_MIN_POOL_SIZE = max(0, min(DB_MAX_POOL_SIZE, int(os.getenv("DB_MIN_POOL_SIZE", "5"))))
+    DB_WAIT_QUEUE_TIMEOUT_MS = max(1000, int(os.getenv("DB_WAIT_QUEUE_TIMEOUT_MS", "5000")))
+
 
     # =========================
     # BOT INFORMATION
@@ -87,6 +93,10 @@ class Config:
     # so large files are split across several independent Telegram requests.
     DOWNLOAD_PARALLEL_WORKERS = max(2, min(16, int(os.getenv("DOWNLOAD_PARALLEL_WORKERS", "12"))))
     DOWNLOAD_PARALLEL_THRESHOLD_MB = max(1, int(os.getenv("DOWNLOAD_PARALLEL_THRESHOLD_MB", "8")))
+
+    # Membership checks are cached briefly because every file message would
+    # otherwise trigger four Telegram API calls.
+    FORCE_SUB_CACHE_SECONDS = max(5, min(60, int(os.getenv("FORCE_SUB_CACHE_SECONDS", "15"))))
 
     MAX_CONCURRENT_PROCESSING = max(1, int(os.getenv("MAX_CONCURRENT_PROCESSING", "2")))
 
