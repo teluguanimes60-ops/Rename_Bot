@@ -271,39 +271,84 @@ async def process_custom_name_job(client, message, job, name: str):
             shutil.rmtree(job.work_dir, ignore_errors=True)
             await jobs.remove(job.job_id)
 
+async def process_convert_name_job(client, message, job, name: str):
+    """Convert and deliver a job while preserving it if the process is interrupted."""
+    ext = str(job.output_ext or "").strip().lower()
+    if not ext:
+        raise RuntimeError("Output format is missing")
+
+    safe_name = _safe_filename(name)
+    if _extension(safe_name) != ext:
+        safe_name = f"{_base_without_extension(safe_name)}.{ext}"
+
+    await jobs.update(
+        job.job_id,
+        extra={
+            **job.extra,
+            "processing": True,
+            "state": "processing",
+            "resume_pending": False,
+            "name_submitted": True,
+            "submitted_name": safe_name,
+        },
+    )
+
+    status = await _new_transfer_status(
+        client,
+        message,
+        job,
+        int((job.extra or {}).get("telegram_file_size", 0) or 0),
+    )
+    try:
+        await _log_rename_activity(job, safe_name)
+        await _download_source(client, message, job, status)
+        output_path = os.path.join(job.work_dir, safe_name)
+        if not await _convert_with_progress(job, status, output_path, ext, safe_name):
+            raise RuntimeError("FFmpeg conversion failed")
+
+        from plugins.rename import _finish_job
+        await _finish_job(client, message, job, output_path, safe_name)
+    except AniToonTransferCancelled:
+        try:
+            await status.edit_text("❌ **Processing cancelled.**")
+        except Exception:
+            pass
+        await jobs.remove(job.job_id)
+        shutil.rmtree(job.work_dir, ignore_errors=True)
+    except asyncio.CancelledError:
+        job.extra["processing"] = False
+        job.extra["resume_pending"] = True
+        job.extra["state"] = "queued"
+        await jobs.update(job.job_id, extra=job.extra)
+        try:
+            await status.edit_text(
+                "⏸️ **Processing paused by bot restart.**\n\n"
+                "Your file is saved and will resume automatically when AniToon is back online."
+            )
+        except Exception:
+            pass
+        raise
+    except Exception as exc:
+        job.extra["processing"] = False
+        job.extra["resume_pending"] = True
+        job.extra["state"] = "queued"
+        job.extra["last_error"] = str(exc)[:1000]
+        await jobs.update(job.job_id, extra=job.extra)
+        try:
+            await status.edit_text(
+                "⏸️ **Processing paused.**\n\n"
+                "Your file job has been saved and will retry automatically after the bot reconnects."
+            )
+        except Exception:
+            pass
+
+
 async def _process_named_job(client, message, job):
     action = job.selected_action
     text = message.text.strip()
 
     if action == "convert_name":
-        ext = job.output_ext
-        if not ext: raise RuntimeError("Output format is missing")
-        name = _safe_filename(text)
-        if _extension(name) != ext: name = f"{_base_without_extension(name)}.{ext}"
-        status = await _new_transfer_status(client, message, job, int((job.extra or {}).get("telegram_file_size", 0) or 0))
-        try:
-            await _log_rename_activity(job, name)
-            await _download_source(client, message, job, status)
-            output_path = os.path.join(job.work_dir, name)
-            if not await _convert_with_progress(job, status, output_path, ext, name): raise RuntimeError("FFmpeg conversion failed")
-            results = await _deliver_output(client, job, output_path, name, status)
-            if not results: raise RuntimeError("Telegram returned no uploaded result")
-            size = int((job.extra or {}).get("downloaded_size", 0) or os.path.getsize(job.input_path))
-            await db.update_usage(job.user_id, job.bot_id, size)
-            await mark_rename_completed(job.job_id)
-            await send_completion_notice(client, job.user_id, parts=len(results))
-            await _finish_delivery(client, message, job, status)
-        except AniToonTransferCancelled:
-            try: await status.edit_text("❌ **Processing cancelled.**")
-            except Exception: pass
-        except asyncio.CancelledError:
-            try: await status.edit_text("❌ **Processing cancelled.**")
-            except Exception: pass
-        except Exception as exc:
-            try: await status.edit_text(f"❌ **Conversion failed**\n\n`{str(exc)[:1000]}`")
-            except Exception: pass
-        finally:
-            clear_transfer_cancel(job.job_id); shutil.rmtree(job.work_dir, ignore_errors=True); await jobs.remove(job.job_id)
+        await process_convert_name_job(client, message, job, text)
         return
 
     if action == "custom_name":
@@ -320,7 +365,6 @@ async def _process_named_job(client, message, job):
                 name = f"{_base_without_extension(name)}.{source_ext}"
 
         await process_custom_name_job(client, message, job, name)
-
 
 @Client.on_message(filters.private & filters.text, group=-1200)
 async def reliable_rename_reply(client, message):
