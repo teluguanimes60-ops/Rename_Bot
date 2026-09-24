@@ -233,3 +233,25 @@ The Telegram command menu intentionally exposes only:
 ```
 
 Normal users should use the inline buttons for the rest of the bot functionality.
+
+
+## 💻 Chromebook / ChromeOS Local Start
+
+ChromeOS Linux does not automatically relaunch Linux VMs or user programs after a reboot. Google documents that Linux apps and VMs must be manually relaunched for security reasons. The easiest supported workflow is to install the local AniToon launcher below and then start it from the ChromeOS Launcher.
+
+One-time setup inside `~/Rename_Bot`:
+
+```bash
+bash install_local_launcher.sh
+```
+
+After that, open **AniToon Local Bot** from the ChromeOS Launcher. It starts:
+
+- the AniToon health server;
+- the Telegram bot supervisor;
+- Cloudflare Quick Tunnel.
+
+The launcher pulls the latest committed code before starting when the working tree is clean. It never overwrites local uncommitted changes.
+
+The Cloudflare Quick Tunnel URL is temporary and can change after a restart. For a stable UptimeRobot URL, use a Cloudflare-managed/named Tunnel with a stable hostname rather than a Quick Tunnel.
+
