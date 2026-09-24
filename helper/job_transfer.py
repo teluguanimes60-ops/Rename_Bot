@@ -150,8 +150,16 @@ async def download_job(client: Client, message: Message, job: Job, status: Messa
             pass
         raise
     except asyncio.CancelledError:
-        await jobs.remove(job.job_id)
-        shutil.rmtree(job.work_dir, ignore_errors=True)
+        # During a bot shutdown/restart, preserve the persistent job record so
+        # it can be downloaded and processed again after connectivity returns.
+        if getattr(client, "_shutting_down", False):
+            job.extra["processing"] = False
+            job.extra["state"] = "queued"
+            job.extra["resume_pending"] = True
+            await jobs.update(job.job_id, extra=job.extra)
+        else:
+            await jobs.remove(job.job_id)
+            shutil.rmtree(job.work_dir, ignore_errors=True)
         raise
     except FloodWait:
         raise
