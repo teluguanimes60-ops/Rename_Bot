@@ -4,6 +4,7 @@ import time
 import uuid
 
 import motor.motor_asyncio
+from pymongo import ReturnDocument
 
 from config import Config
 
@@ -64,6 +65,15 @@ class Database:
 
     async def add_user(self, user_id: int):
         await self.col.update_one({"id": int(user_id)}, {"$setOnInsert": self.new_user(user_id)}, upsert=True)
+
+    async def get_or_create_user(self, user_id: int):
+        """Fetch a user or create it atomically in one MongoDB round trip."""
+        return await self.col.find_one_and_update(
+            {"id": int(user_id)},
+            {"$setOnInsert": self.new_user(user_id)},
+            upsert=True,
+            return_document=ReturnDocument.AFTER,
+        )
 
     async def is_user_exist(self, user_id: int) -> bool:
         return await self.col.count_documents({"id": int(user_id)}, limit=1) > 0
