@@ -220,13 +220,12 @@ async def start(client: Client, message: Message):
     bot_id = int(getattr(client, "bot_id", 0))
     try:
         try:
-            await db.add_user(user_id)
+            user_record = await db.get_or_create_user(user_id) or {}
         except Exception:
             log.exception("Could not create/find user %s", user_id)
+            user_record = {}
 
-        # Every user must choose a language before using the bot. Reuse the
-        # same user document instead of making a second MongoDB request.
-        user_record = await db.get_user_data(user_id) or {}
+        # Reuse the same user document instead of making another MongoDB request.
         language = user_record.get("language")
         if not language:
             from helper.i18n import t
