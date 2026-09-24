@@ -4,7 +4,7 @@ import asyncio
 
 async def split_file(
     input_file: str,
-    chunk_size: int = 2_000_000_000,
+    chunk_size: int = 1_900 * 1024 * 1024,
 ):
     """
     Splits a large file into smaller parts.
