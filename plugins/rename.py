@@ -71,12 +71,15 @@ def _media_from_message(message: Message):
 
 async def _user_context(user_id: int, bot_id: int):
     await db.add_user(user_id)
-    user = await db.get_user_data(user_id) or {}
+    user, sub, used = await asyncio.gather(
+        db.get_user_data(user_id),
+        db.get_subscription(user_id, bot_id),
+        db.get_usage(user_id, bot_id),
+    )
+    user = user or {}
     if user.get("is_banned"):
         return None, "❌ **You are banned from using this bot.**"
-    sub = await db.get_subscription(user_id, bot_id)
-    plan = get_plan(sub.get("plan", "free"))
-    used = await db.get_usage(user_id, bot_id)
+    plan = get_plan((sub or {}).get("plan", "free"))
     return (user, plan, used), None
 
 
