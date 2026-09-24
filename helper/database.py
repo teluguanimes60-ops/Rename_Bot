@@ -1,3 +1,4 @@
+import asyncio
 from datetime import datetime, timedelta
 import time
 import uuid
@@ -13,7 +14,16 @@ DEFAULT_METADATA_NAME = "AniToon Official"
 
 class Database:
     def __init__(self, uri: str, database_name: str = DB_NAME):
-        self._client = motor.motor_asyncio.AsyncIOMotorClient(uri, serverSelectionTimeoutMS=5000, connectTimeoutMS=5000, socketTimeoutMS=10000)
+        self._client = motor.motor_asyncio.AsyncIOMotorClient(
+            uri,
+            serverSelectionTimeoutMS=5000,
+            connectTimeoutMS=5000,
+            socketTimeoutMS=10000,
+            maxPoolSize=Config.DB_MAX_POOL_SIZE,
+            minPoolSize=Config.DB_MIN_POOL_SIZE,
+            waitQueueTimeoutMS=Config.DB_WAIT_QUEUE_TIMEOUT_MS,
+            maxConnecting=4,
+        )
         self.db = self._client[database_name]
         self.col = self.db.user
         self.subscriptions = self.db.subscriptions
@@ -24,6 +34,29 @@ class Database:
         self.force_sub_requests = self.db.force_sub_requests
         self.support_requests = self.db.support_requests
         self.jobs = self.db.jobs
+
+    async def ensure_performance_indexes(self):
+        """Ensure hot-path query indexes exist without blocking bot startup."""
+        indexes = [
+            self.col.create_index("id", name="user_id_idx"),
+            self.subscriptions.create_index([("user_id", 1), ("bot_id", 1)], name="subscription_user_bot_idx"),
+            self.usage.create_index([("user_id", 1), ("bot_id", 1), ("date", 1)], name="usage_user_bot_date_idx"),
+            self.advanced_usage.create_index(
+                [("user_id", 1), ("bot_id", 1), ("date", 1), ("feature", 1)],
+                name="advanced_usage_lookup_idx",
+            ),
+            self.jobs.create_index([("bot_id", 1), ("state", 1), ("created_at", 1)], name="jobs_recovery_lookup_idx"),
+            self.clones.create_index("bot_id", name="clone_bot_id_idx"),
+        ]
+        results = await asyncio.gather(*indexes, return_exceptions=True)
+        failures = [result for result in results if isinstance(result, Exception)]
+        if failures:
+            for failure in failures:
+                # Never make the bot unavailable just because an optional index
+                # cannot be created on a restricted MongoDB deployment.
+                print(f"Database performance index warning: {failure}")
+            return False
+        return True
 
     @staticmethod
     def new_user(user_id: int) -> dict:
