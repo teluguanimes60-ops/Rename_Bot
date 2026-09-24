@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import time
 
 from pyrogram import Client, filters
 from pyrogram.errors import UserNotParticipant
@@ -12,6 +13,9 @@ from helper.utils import humanbytes
 from plugins.ui import main_menu, language_keyboard, language_confirm_keyboard
 
 log = logging.getLogger(__name__)
+
+_FORCE_SUB_CACHE: dict[int, tuple[float, int, list[dict], list[dict]]] = {}
+_FORCE_SUB_CACHE_LOCK = asyncio.Lock()
 
 
 def _force_sub_client(client: Client) -> Client:
@@ -94,8 +98,16 @@ async def _check_one_channel(client: Client, user_id: int, channel: dict):
         return None
 
 
-async def get_force_sub_status(client: Client, user_id: int):
-    """Check every public channel and return only channels the user has not joined."""
+async def get_force_sub_status(client: Client, user_id: int, *, force_refresh: bool = False):
+    """Check public channels concurrently, with a brief cache for bursty uploads."""
+    uid = int(user_id)
+    now = time.monotonic()
+    if not force_refresh:
+        cached = _FORCE_SUB_CACHE.get(uid)
+        if cached and now - cached[0] < Config.FORCE_SUB_CACHE_SECONDS:
+            _, joined_count, missing_channels, failed_channels = cached
+            return joined_count, list(missing_channels), list(failed_channels)
+
     checker = _force_sub_client(client)
     channels = _configured_force_sub_channels()
     FORCE_SUB_CHANNELS.clear()
@@ -117,6 +129,8 @@ async def get_force_sub_status(client: Client, user_id: int):
         else:
             failed_channels.append(channel)
 
+    result = (joined_count, list(missing_channels), list(failed_channels))
+    _FORCE_SUB_CACHE[uid] = (now, *result)
     return joined_count, missing_channels, failed_channels
 
 
@@ -176,7 +190,7 @@ async def check_force_sub_callback(client: Client, callback_query):
     try:
         await callback_query.answer("Checking…")
         joined_count, missing_channels, failed_channels = await get_force_sub_status(
-            client, callback_query.from_user.id
+            client, callback_query.from_user.id, force_refresh=True
         )
         if not missing_channels and not failed_channels and joined_count == len(FORCE_SUB_CHANNELS):
             try:
@@ -210,8 +224,10 @@ async def start(client: Client, message: Message):
         except Exception:
             log.exception("Could not create/find user %s", user_id)
 
-        # Every user must choose a language before using the bot.
-        language = await db.get_language(user_id)
+        # Every user must choose a language before using the bot. Reuse the
+        # same user document instead of making a second MongoDB request.
+        user_record = await db.get_user_data(user_id) or {}
+        language = user_record.get("language")
         if not language:
             from helper.i18n import t
             await message.reply_text(
@@ -268,9 +284,11 @@ async def start(client: Client, message: Message):
 
         plan_name, used, remaining = "🆓 Free", 0, 10 * 1024 * 1024 * 1024
         try:
-            subscription = await db.get_subscription(user_id, bot_id)
+            subscription, used = await asyncio.gather(
+                db.get_subscription(user_id, bot_id),
+                db.get_usage(user_id, bot_id),
+            )
             plan = get_plan(subscription.get("plan", "free"))
-            used = await db.get_usage(user_id, bot_id)
             plan_name = plan.name
             remaining = max(plan.daily_limit - used, 0)
         except Exception:
