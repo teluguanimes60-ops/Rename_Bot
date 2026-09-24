@@ -288,9 +288,14 @@ class Bot(Client):
                     source = await self.get_messages(job.user_id, job.source_message_id)
                 except Exception:
                     source = None
+            # The original Telegram message may have been cleaned up after
+            # the first download. The persisted file_id can still identify
+            # the same media for a fresh recovery download.
+            if source is None:
+                source = str(job.extra.get("file_id") or "").strip() or None
             if source is None:
                 raise RuntimeError(
-                    f"Original source message {job.source_message_id} not found for job {job.job_id}"
+                    f"Original Telegram file is no longer recoverable for job {job.job_id}"
                 )
 
             if job.selected_action == "custom_name":
