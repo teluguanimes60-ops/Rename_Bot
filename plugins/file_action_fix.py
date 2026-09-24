@@ -240,7 +240,7 @@ async def repaired_file_download(client: Client, message: Message):
     expected_size = int(getattr(media, "file_size", 0) or 0)
     from config import Config
     if expected_size > Config.MAX_FILE_SIZE_BYTES:
-        await message.reply_text("🚫 **File is too large.**\\n\\nMaximum allowed file size is `2 GB` per file.")
+        await message.reply_text("🚫 **File is too large.**\\n\\nMaximum allowed file size is `4 GB` per file. Telegram/Pyrogram may still reject a single source file above its own platform transport limit; supported large outputs are automatically split into Telegram-safe parts.")
         raise StopPropagation
     if used + expected_size > plan.daily_limit:
         await message.reply_text("🚫 **This file exceeds your remaining daily quota.**\n\n" f"Plan: {plan.name}\nRemaining: `{humanbytes(max(plan.daily_limit - used, 0))}`\nFile: `{humanbytes(expected_size)}`")
