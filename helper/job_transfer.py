@@ -78,6 +78,132 @@ def _needs_faststart(path: str) -> bool:
     return False
 
 
+async def _parallel_stream_download(
+    client: Client,
+    source,
+    destination: str,
+    expected_size: int,
+    status: Message | None,
+    job: Job,
+) -> int:
+    """Download a large Telegram file with parallel 1 MiB MTProto ranges."""
+    from helper.utils import is_transfer_cancelled
+
+    chunk_size = 1024 * 1024
+    total_chunks = (expected_size + chunk_size - 1) // chunk_size
+    workers = max(
+        2,
+        min(
+            int(getattr(Config, "DOWNLOAD_PARALLEL_WORKERS", 8)),
+            total_chunks,
+        ),
+    )
+    if total_chunks <= 1:
+        raise RuntimeError("parallel download requires more than one chunk")
+
+    ranges = []
+    base, extra = divmod(total_chunks, workers)
+    start = 0
+    for index in range(workers):
+        count = base + (1 if index < extra else 0)
+        if count:
+            ranges.append((start, count))
+            start += count
+
+    os.makedirs(os.path.dirname(destination) or ".", exist_ok=True)
+    with open(destination, "w+b") as output:
+        output.truncate(expected_size)
+
+    started = time.time()
+    progress_lock = asyncio.Lock()
+    progress_bytes = 0
+    last_progress = 0.0
+    tasks = []
+
+    async def worker(start_chunk: int, chunk_count: int):
+        nonlocal progress_bytes, last_progress
+        position = start_chunk * chunk_size
+        written = 0
+
+        with open(destination, "r+b", buffering=0) as output:
+            async for chunk in client.stream_media(
+                source,
+                limit=chunk_count,
+                offset=start_chunk,
+            ):
+                if is_transfer_cancelled(job.job_id):
+                    raise AniToonTransferCancelled("Transfer cancelled by user")
+
+                expected_chunk = min(
+                    chunk_size,
+                    max(0, expected_size - position),
+                )
+                if expected_chunk <= 0:
+                    raise RuntimeError("Telegram returned more data than expected")
+                if len(chunk) != expected_chunk and position + len(chunk) < expected_size:
+                    raise RuntimeError(
+                        f"Incomplete parallel chunk at offset {position}: "
+                        f"expected {expected_chunk}, got {len(chunk)}"
+                    )
+
+                output.seek(position)
+                output.write(chunk)
+
+                position += len(chunk)
+                written += len(chunk)
+
+                async with progress_lock:
+                    progress_bytes += len(chunk)
+                    now = time.time()
+                    if progress_bytes >= expected_size or now - last_progress >= 1.0:
+                        last_progress = now
+                        await progress_for_pyrogram(
+                            progress_bytes,
+                            expected_size,
+                            "Downloading",
+                            status,
+                            started,
+                            job.job_id,
+                        )
+
+        expected_range = min(
+            expected_size - (start_chunk * chunk_size),
+            chunk_count * chunk_size,
+        )
+        if written != expected_range:
+            raise RuntimeError(
+                f"Parallel worker ended early: expected {expected_range}, got {written}"
+            )
+
+    try:
+        for start_chunk, chunk_count in ranges:
+            tasks.append(asyncio.create_task(worker(start_chunk, chunk_count)))
+        await asyncio.gather(*tasks)
+
+        actual = os.path.getsize(destination)
+        if actual != expected_size:
+            raise RuntimeError(
+                f"Parallel download size mismatch: expected {expected_size}, got {actual}"
+            )
+
+        await progress_for_pyrogram(
+            actual,
+            expected_size,
+            "Downloading",
+            status,
+            started,
+            job.job_id,
+        )
+        return actual
+    except BaseException:
+        for task in tasks:
+            if not task.done():
+                task.cancel()
+        if tasks:
+            await asyncio.gather(*tasks, return_exceptions=True)
+        raise
+
+
 async def download_job(client: Client, message: Message, job: Job, status: Message) -> int:
     expected_size = int(job.extra.get("telegram_file_size", 0) or 0)
     if os.path.isfile(job.input_path) and os.path.getsize(job.input_path) > 0:
@@ -115,15 +241,59 @@ async def download_job(client: Client, message: Message, job: Job, status: Messa
         started = time.time()
         if expected_size:
             await progress_for_pyrogram(0, expected_size, "Downloading", status, started, job.job_id)
-        # Use Pyrofork's native downloader for a stable Telegram media session.
-        # Concurrent per-range stream_media() sessions can race MTProto
-        # cross-DC authorization imports and trigger AUTH_BYTES_INVALID.
-        result = await client.download_media(
-            message=source,
-            file_name=job.input_path,
-            progress=progress_for_pyrogram,
-            progress_args=("Downloading", status, started, job.job_id),
-        )
+        result = None
+        parallel_threshold = max(
+            1,
+            int(getattr(Config, "DOWNLOAD_PARALLEL_THRESHOLD_MB", 8)),
+        ) * 1024 * 1024
+        if expected_size >= parallel_threshold and expected_size > 1024 * 1024:
+            try:
+                result = job.input_path
+                await _parallel_stream_download(
+                    client,
+                    source,
+                    job.input_path,
+                    expected_size,
+                    status,
+                    job,
+                )
+                log = logging.getLogger("AniToonTransfer")
+                log.info(
+                    "Parallel download completed for job %s using %s workers",
+                    job.job_id,
+                    min(
+                        int(getattr(Config, "DOWNLOAD_PARALLEL_WORKERS", 8)),
+                        (expected_size + 1024 * 1024 - 1) // (1024 * 1024),
+                    ),
+                )
+            except AniToonTransferCancelled:
+                raise
+            except asyncio.CancelledError:
+                raise
+            except Exception as parallel_exc:
+                # A Telegram DC/session issue should not make the job fail.
+                # Remove the partial file and fall back to Pyrofork's stable
+                # native downloader.
+                log = logging.getLogger("AniToonTransfer")
+                log.warning(
+                    "Parallel download failed for job %s; falling back to native downloader: %s",
+                    job.job_id,
+                    parallel_exc,
+                )
+                try:
+                    if os.path.isfile(job.input_path):
+                        os.remove(job.input_path)
+                except OSError:
+                    pass
+                result = None
+
+        if result is None:
+            result = await client.download_media(
+                message=source,
+                file_name=job.input_path,
+                progress=progress_for_pyrogram,
+                progress_args=("Downloading", status, started, job.job_id),
+            )
         if is_transfer_cancelled(job.job_id):
             raise AniToonTransferCancelled("Transfer cancelled by user")
         path = result if isinstance(result, str) and os.path.isfile(result) else job.input_path
