@@ -2,6 +2,7 @@ import asyncio
 import logging
 import os
 import shutil
+import time
 
 from pyrogram import Client
 from pyrogram.errors import FloodWait
@@ -96,6 +97,10 @@ def install_runtime_localization():
     Client._anitoon_localization_installed = True
 
 
+HEARTBEAT_FILE = os.environ.get("ANITOON_HEARTBEAT_FILE", "/tmp/anitoon_1bot_heartbeat")
+CONNECTIVITY_CHECK_INTERVAL = max(10, int(os.environ.get("ANITOON_CONNECTIVITY_CHECK_INTERVAL", "15")))
+
+
 BOT_COMMANDS = [
     BotCommand("start", "Open AniToon"),
     BotCommand("help", "Show help"),
@@ -127,6 +132,10 @@ class Bot(Client):
         self.bot_id = 0
         self.bot_username = None
         self.clone_manager = None
+        self._heartbeat_task = None
+        self._connectivity_online = False
+        self._broadcast_task = None
+        self._shutting_down = False
 
     async def _setup_commands(self):
         try:
@@ -148,39 +157,131 @@ class Bot(Client):
         except Exception:
             log.exception("Could not clean stale job records")
 
+    async def _touch_heartbeat(self) -> None:
+        try:
+            parent = os.path.dirname(HEARTBEAT_FILE)
+            if parent:
+                os.makedirs(parent, exist_ok=True)
+            with open(HEARTBEAT_FILE, "a", encoding="utf-8"):
+                pass
+            os.utime(HEARTBEAT_FILE, None)
+        except OSError:
+            pass
+
+    async def _clear_heartbeat(self) -> None:
+        try:
+            os.remove(HEARTBEAT_FILE)
+        except FileNotFoundError:
+            pass
+        except OSError:
+            pass
+
+    async def _broadcast_status(self, text: str) -> None:
+        """Best-effort lifecycle broadcast to all known users."""
+        semaphore = asyncio.Semaphore(8)
+
+        async def send_one(user_id: int):
+            async with semaphore:
+                for attempt in range(3):
+                    try:
+                        await self.send_message(int(user_id), text)
+                        return
+                    except FloodWait as exc:
+                        if attempt >= 2:
+                            return
+                        await asyncio.sleep(max(1, int(getattr(exc, "value", 1) or 1)))
+                    except Exception:
+                        return
+
+        batch = []
+        try:
+            async for user in db.get_all_users():
+                if user.get("is_banned"):
+                    continue
+                user_id = int(user.get("id", 0) or 0)
+                if not user_id:
+                    continue
+                batch.append(asyncio.create_task(send_one(user_id)))
+                if len(batch) >= 40:
+                    await asyncio.gather(*batch, return_exceptions=True)
+                    batch.clear()
+            if batch:
+                await asyncio.gather(*batch, return_exceptions=True)
+        except Exception:
+            log.exception("Could not complete lifecycle broadcast")
+
+    async def _announce_online(self, recover: bool = True) -> None:
+        was_online = self._connectivity_online
+        self._connectivity_online = True
+        await self._touch_heartbeat()
+
+        if not was_online:
+            self._broadcast_task = asyncio.create_task(
+                self._broadcast_status(
+                    "✅ **AniToon Bot is back online!**\n\n"
+                    "You can use the bot now. Any recoverable file job interrupted while the bot was offline will restart automatically."
+                )
+            )
+        if recover:
+            await self._recover_jobs()
+
+    async def _connectivity_monitor(self) -> None:
+        while not self._shutting_down:
+            try:
+                await self.get_me()
+                await self._announce_online(recover=not self._connectivity_online)
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:
+                if self._connectivity_online:
+                    self._connectivity_online = False
+                    await self._clear_heartbeat()
+                    self._broadcast_task = asyncio.create_task(
+                        self._broadcast_status(
+                            "⚠️ **AniToon Bot is temporarily offline.**\n\n"
+                            "Please wait while the connection is restored. Any recoverable file job is saved and will resume automatically."
+                        )
+                    )
+                    log.warning("Telegram connectivity lost: %s", exc)
+            try:
+                await asyncio.sleep(CONNECTIVITY_CHECK_INTERVAL)
+            except asyncio.CancelledError:
+                raise
+
     async def _recover_jobs(self):
         recovered = await jobs.restore_from_db(self.bot_id)
         if not recovered:
             return
-        # Notify only users whose file is actually in the rename/processing
-        # stage and can be restarted. Jobs still waiting for an action/name
-        # must not receive an update message.
-        processing_jobs = [
+
+        resumable = [
             job for job in recovered
-            if job.selected_action == "custom_name" and job.extra.get("name_submitted")
+            if job.selected_action in {"custom_name", "convert_name"}
+            and job.extra.get("name_submitted")
+            and not job.extra.get("resume_in_progress")
         ]
-        users = sorted({int(job.user_id) for job in processing_jobs})
+        if not resumable:
+            return
+
+        users = sorted({int(job.user_id) for job in resumable})
         for user_id in users:
             try:
                 await self.send_message(
                     user_id,
-                    "🔄 **AniToon Bot is updating...**\n\n"
-                    "Please wait. Your file will start again automatically from the beginning after the update."
+                    "🔄 **AniToon Bot is restoring your file...**\n\n"
+                    "The bot was interrupted, but your file job was saved. Processing will restart automatically from the beginning.",
                 )
             except Exception:
                 pass
 
-        for job in processing_jobs:
-            name = str(job.extra.get("submitted_name") or job.extra.get("auto_name") or "").strip()
-            if name:
-                asyncio.create_task(self._resume_one_job(job, name))
+        for job in resumable:
+            job.extra["resume_in_progress"] = True
+            await jobs.update(job.job_id, extra=job.extra)
+            asyncio.create_task(self._resume_one_job(job))
 
-    async def _resume_one_job(self, job, name: str):
+    async def _resume_one_job(self, job):
         from plugins.rename_reply_responder import process_custom_name_job
+
         try:
-            # A deployment must restart the unfinished job from the beginning.
-            # Remove any partial local download/output so the next transfer
-            # starts from the original Telegram file again.
             shutil.rmtree(job.work_dir, ignore_errors=True)
             os.makedirs(job.work_dir, exist_ok=True)
 
@@ -191,13 +292,59 @@ class Bot(Client):
                 except Exception:
                     source = None
             if source is None:
-                log.error("Original source message %s not found for job %s", job.source_message_id, job.job_id)
+                raise RuntimeError(
+                    f"Original source message {job.source_message_id} not found for job {job.job_id}"
+                )
+
+            if job.selected_action == "custom_name":
+                name = str(
+                    job.extra.get("submitted_name")
+                    or job.extra.get("auto_name")
+                    or ""
+                ).strip()
+                if not name:
+                    raise RuntimeError("Saved output name is missing")
+                await process_custom_name_job(self, source, job, name)
                 return
 
-            await process_custom_name_job(self, source, job, name)
-        except Exception:
-            log.exception("Could not resume job %s", job.job_id)
+            if job.selected_action == "convert_name":
+                from helper.ffmpeg import convert_media
+                from helper.job_transfer import download_job
+                from plugins.rename import _base_without_extension, _extension, _safe_filename, _finish_job
 
+                ext = str(job.output_ext or "").strip().lower()
+                if not ext:
+                    raise RuntimeError("Saved conversion format is missing")
+
+                raw_name = str(job.extra.get("submitted_name") or "file").strip()
+                name = _safe_filename(raw_name)
+                if _extension(name) != ext:
+                    name = f"{_base_without_extension(name)}.{ext}"
+
+                status = await self.send_message(
+                    job.user_id,
+                    f"🔄 **Restoring conversion to {ext.upper()}...**\n\n"
+                    "Please wait while the file is downloaded again and processed.",
+                )
+                await download_job(self, source, job, status)
+
+                output_path = os.path.join(job.work_dir, name)
+                if not await convert_media(job.input_path, output_path, ext):
+                    raise RuntimeError("FFmpeg conversion failed during recovery")
+
+                await _finish_job(self, status, job, output_path, name)
+        except asyncio.CancelledError:
+            job.extra["processing"] = False
+            job.extra["resume_in_progress"] = False
+            job.extra["state"] = "queued"
+            await jobs.update(job.job_id, extra=job.extra)
+            raise
+        except Exception:
+            job.extra["processing"] = False
+            job.extra["resume_in_progress"] = False
+            job.extra["state"] = "queued"
+            await jobs.update(job.job_id, extra=job.extra)
+            log.exception("Could not resume job %s", job.job_id)
     async def start(self):
         while True:
             try:
@@ -205,6 +352,7 @@ class Bot(Client):
                 me = await self.get_me()
                 self.bot_id = me.id
                 self.bot_username = me.username
+                self._shutting_down = False
                 install_auto_cleanup(self)
                 log.info("Main bot started: @%s (ID: %s)", me.username or "unknown", me.id)
                 log.info("Telegram transfer concurrency: %s", Config.MAX_CONCURRENT_TRANSMISSIONS)
@@ -215,7 +363,10 @@ class Bot(Client):
                     await ensure_activity_indexes()
                 except Exception:
                     log.exception("Could not initialize rename activity index")
-                await self._recover_jobs()
+
+                await self._announce_online(recover=True)
+                self._heartbeat_task = asyncio.create_task(self._connectivity_monitor())
+
                 if Config.IS_CLONE_ALLOWED:
                     self.clone_manager = CloneManager(self)
                     await self.clone_manager.start_all()
@@ -232,11 +383,39 @@ class Bot(Client):
                 raise
 
     async def stop(self, *args):
+        if self._shutting_down:
+            return
+        self._shutting_down = True
+
+        if self._heartbeat_task:
+            self._heartbeat_task.cancel()
+            try:
+                await self._heartbeat_task
+            except asyncio.CancelledError:
+                pass
+            except Exception:
+                pass
+            self._heartbeat_task = None
+
+        await self._clear_heartbeat()
+
+        try:
+            await asyncio.wait_for(
+                self._broadcast_status(
+                    "⚠️ **AniToon Bot is temporarily offline.**\n\n"
+                    "The bot is being stopped or restarted. Please wait. Any recoverable file job is saved and will resume automatically when the bot is back online."
+                ),
+                timeout=12,
+            )
+        except Exception:
+            pass
+
         if self.clone_manager:
             await self.clone_manager.stop_all()
             self.clone_manager = None
         await super().stop()
         log.info("AniToon_1Bot stopped")
+
 
 
 if __name__ == "__main__":
