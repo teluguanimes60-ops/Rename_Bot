@@ -16,6 +16,7 @@ from helper.cancel_manager import register_task, unregister_task
 from helper.database import db
 from helper.ffmpeg import convert_media, fix_metadata, get_video_info, inspect_media_streams, remux_with_track_names, take_screenshot
 from helper.job_state import Job, jobs
+from helper.large_video import MAX_PART_BYTES
 from helper.job_transfer import download_job, send_completion_notice
 from helper.metadata import get_metadata, language_name
 from helper.thumbnail_manager import resolve_thumbnail
@@ -224,9 +225,9 @@ async def _finish_job(client, message: Message, job: Job, output_path: str, outp
                 duration,
             )
             parts = [output_path]
-            if os.path.getsize(output_path) > 2_000_000_000:
-                await status.edit_text("✂️ **Large file detected. Splitting into parts...**")
-                parts = await split_file(output_path, 2_000_000_000)
+            if os.path.getsize(output_path) > MAX_PART_BYTES:
+                await status.edit_text("✂️ **Large file detected. Splitting into Telegram-safe parts...**")
+                parts = await split_file(output_path, MAX_PART_BYTES)
 
             sent_results = []
             for index, part in enumerate(parts, 1):
