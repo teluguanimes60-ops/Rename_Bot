@@ -93,6 +93,7 @@ class Config:
     # so large files are split across several independent Telegram requests.
     DOWNLOAD_PARALLEL_WORKERS = max(2, min(16, int(os.getenv("DOWNLOAD_PARALLEL_WORKERS", "12"))))
     DOWNLOAD_PARALLEL_THRESHOLD_MB = max(1, int(os.getenv("DOWNLOAD_PARALLEL_THRESHOLD_MB", "8")))
+    UPLOAD_PARALLEL_WORKERS = max(2, min(12, int(os.getenv("UPLOAD_PARALLEL_WORKERS", "8"))))
 
     # Membership checks are cached briefly because every file message would
     # otherwise trigger four Telegram API calls.
