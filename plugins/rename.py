@@ -195,7 +195,13 @@ async def _send_output(client, message: Message, job: Job, path: str, filename: 
 
 
 async def _finish_job(client, message: Message, job: Job, output_path: str, output_name: str):
+    await jobs.update(
+        job.job_id,
+        extra={**job.extra, "processing": True, "state": "processing", "resume_pending": False},
+    )
     task = await register_task(job.job_id)
+    completed = False
+    user_cancelled = False
     try:
         status = await message.reply_text("📦 **Preparing output...**")
         try:
@@ -203,7 +209,10 @@ async def _finish_job(client, message: Message, job: Job, output_path: str, outp
             used = int(job.extra.get("used_before", 0))
             plan = get_plan((await db.get_subscription(job.user_id, job.bot_id)).get("plan", "free"))
             if used + input_size > plan.daily_limit:
-                return await status.edit_text("🚫 **Daily quota exceeded for this job.**")
+                await status.edit_text("🚫 **Daily quota exceeded for this job.**")
+                user_cancelled = True
+                return
+
             await _apply_metadata_settings(job, output_path)
             duration = width = height = 0
             if (job.mime_type or "").startswith("video/") or _extension(output_name) == "mp4":
@@ -218,31 +227,98 @@ async def _finish_job(client, message: Message, job: Job, output_path: str, outp
             if os.path.getsize(output_path) > 2_000_000_000:
                 await status.edit_text("✂️ **Large file detected. Splitting into parts...**")
                 parts = await split_file(output_path, 2_000_000_000)
+
             sent_results = []
             for index, part in enumerate(parts, 1):
                 name = os.path.basename(part)
                 if len(parts) > 1:
                     stem, ext = os.path.splitext(output_name)
                     name = f"{stem}.part{index:03d}{ext or ''}"
-                sent_results.append(await _send_output(client, message, job, part, name, status, duration if index == 1 else 0, width if index == 1 else 0, height if index == 1 else 0, thumb if index == 1 else None))
+                sent_results.append(
+                    await _send_output(
+                        client,
+                        message,
+                        job,
+                        part,
+                        name,
+                        status,
+                        duration if index == 1 else 0,
+                        width if index == 1 else 0,
+                        height if index == 1 else 0,
+                        thumb if index == 1 else None,
+                    )
+                )
+
+            await jobs.update(
+                job.job_id,
+                extra={
+                    **job.extra,
+                    "processing": False,
+                    "resume_pending": False,
+                    "state": "completed",
+                    "delivery_complete": True,
+                    "completed_name": output_name,
+                },
+            )
+
             if not job.extra.get("usage_charged"):
                 await db.update_usage(job.user_id, job.bot_id, input_size)
-                await jobs.update(job.job_id, extra={**job.extra, "usage_charged": True})
-            await send_completion_notice(client, job.user_id, results=sent_results, parts=len(parts))
-            await status.edit_text("✅ **Processing Complete!**\n\n" f"📂 `{output_name}`\n" f"📦 `{humanbytes(os.path.getsize(output_path))}`\n" f"🧩 Parts: `{len(parts)}`")
-        except FloodWait as exc:
-            await status.edit_text(f"⏳ **FloodWait**\nWaiting `{exc.value}` seconds...")
-            await asyncio.sleep(exc.value)
+                job.extra["usage_charged"] = True
+
+            await send_completion_notice(
+                client,
+                job.user_id,
+                results=sent_results,
+                parts=len(parts),
+            )
+            await status.edit_text(
+                "✅ **Processing Complete!**\n\n"
+                f"📂 `{output_name}`\n"
+                f"📦 `{humanbytes(os.path.getsize(output_path))}`\n"
+                f"🧩 Parts: `{len(parts)}`"
+            )
+            completed = True
+        except AniToonTransferCancelled:
+            user_cancelled = True
+            try:
+                await status.edit_text("❌ **Processing cancelled.**")
+            except Exception:
+                pass
+        except asyncio.CancelledError:
+            job.extra["processing"] = False
+            job.extra["resume_pending"] = True
+            job.extra["state"] = "queued"
+            await jobs.update(job.job_id, extra=job.extra)
+            try:
+                await status.edit_text(
+                    "⏸️ **Processing paused by bot restart.**\n\n"
+                    "Your file is saved and will resume automatically when AniToon is back online."
+                )
+            except Exception:
+                pass
+            raise
         except Exception as exc:
-            await status.edit_text(f"❌ **Processing failed**\n\n`{str(exc)[:1000]}`")
+            job.extra["processing"] = False
+            job.extra["resume_pending"] = True
+            job.extra["state"] = "queued"
+            job.extra["last_error"] = str(exc)[:1000]
+            await jobs.update(job.job_id, extra=job.extra)
+            try:
+                await status.edit_text(
+                    "⏸️ **Processing paused.**\n\n"
+                    "Your file job has been saved and will retry automatically after the bot reconnects."
+                )
+            except Exception:
+                pass
         finally:
-            if 'temporary_thumb' in locals() and temporary_thumb:
+            if "temporary_thumb" in locals() and temporary_thumb:
                 try:
                     os.remove(temporary_thumb)
                 except OSError:
                     pass
-            shutil.rmtree(job.work_dir, ignore_errors=True)
-            await jobs.remove(job.job_id)
+            if completed or user_cancelled:
+                shutil.rmtree(job.work_dir, ignore_errors=True)
+                await jobs.remove(job.job_id)
     finally:
         await unregister_task(job.job_id, task)
 
