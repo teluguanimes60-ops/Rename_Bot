@@ -343,13 +343,22 @@ class Bot(Client):
                 install_auto_cleanup(self)
                 log.info("Main bot started: @%s (ID: %s)", me.username or "unknown", me.id)
                 log.info("Telegram transfer concurrency: %s", Config.MAX_CONCURRENT_TRANSMISSIONS)
-                await self._setup_commands()
-                await self._cleanup_stale_jobs()
-                try:
-                    from helper.activity_log import ensure_activity_indexes
-                    await ensure_activity_indexes()
-                except Exception:
-                    log.exception("Could not initialize rename activity index")
+                # Run independent startup maintenance concurrently so the bot
+                # can become responsive without waiting on MongoDB index checks.
+                async def _activity_indexes():
+                    try:
+                        from helper.activity_log import ensure_activity_indexes
+                        await ensure_activity_indexes()
+                    except Exception:
+                        log.exception("Could not initialize rename activity index")
+
+                await asyncio.gather(
+                    self._setup_commands(),
+                    self._cleanup_stale_jobs(),
+                    db.ensure_performance_indexes(),
+                    _activity_indexes(),
+                    return_exceptions=True,
+                )
 
                 await self._announce_online(recover=True)
                 self._heartbeat_task = asyncio.create_task(self._connectivity_monitor())
